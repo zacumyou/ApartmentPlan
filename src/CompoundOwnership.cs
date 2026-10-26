@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Colossal.Serialization.Entities;
@@ -59,6 +59,7 @@ public partial class PlanSystem {
    if(!EntityManager.HasBuffer<Game.Net.ConnectedEdge>(node)){retained.Add(node);continue;}
    foreach(var edge in EntityManager.GetBuffer<Game.Net.ConnectedEdge>(node,true))if(EntityManager.Exists(edge.m_Edge)&&!EntityManager.HasComponent<Deleted>(edge.m_Edge)&&(!verified.Contains(edge.m_Edge)||!owned.Contains(edge.m_Edge))){retained.Add(node);break;}
   }
+  if(ReplacingCompound(stored.Info.Number)&&retained.Any(e=>EntityManager.HasComponent<Game.Net.Edge>(e))){Status="AP.ReplacementProtectedRoad";return;}
   owned.RemoveAll(retained.Contains);Trace.Event("plan.demolition.protectedRoads","retained="+retained.Count);
   EnsurePlanningCatalog();
   if(EntityManager.HasComponent<PlanGrassWork>(stored.Entity))EntityManager.SetComponentData(stored.Entity,new PlanGrassWork{State=2});
@@ -74,7 +75,8 @@ public partial class PlanSystem {
     if(EntityManager.HasBuffer<Game.Net.ConnectedEdge>(entity)){bool shared=false;foreach(var edge in EntityManager.GetBuffer<Game.Net.ConnectedEdge>(entity,true))if((!owned.Contains(edge.m_Edge)||!verified.Contains(edge.m_Edge))&&EntityManager.Exists(edge.m_Edge)&&!EntityManager.HasComponent<Deleted>(edge.m_Edge))shared=true;if(shared)buffer.RemoveAt(i);}
    }
   }
-  if(OwnedObjects(stored).Count>0){Status="AP.DemolitionIncomplete";Revision++;return;}
+  if(OwnedObjects(stored).Count>0){Status="AP.DemolitionIncomplete";CancelCompoundReplacement();Revision++;return;}
+  if(FinishCompoundReplacement(stored))return;
   EntityManager.DestroyEntity(stored.Entity);Saved.Remove(stored);if(EditingPlan==id){EditingPlan=-1;Draft=null;Preview.Clear();Boundary.Clear();Entrances.Clear();Entrance=null;}SelectedPlan=-1;NativeCommitted=false;Status="AP.DemolitionApplied";Revision++;
   Trace.Event("plan.demolition.complete","id="+id);
  }
@@ -126,10 +128,10 @@ public partial class ConstructionTool {
    if(!EntityManager.HasComponent<Owner>(entity))return false;entity=EntityManager.GetComponentData<Owner>(entity).m_Owner;
   }return false;
  }
- void SubmitDemolition(){
+ IEnumerable<int> SubmitDemolition(){
   foreach(var target in demolitionTargets){
    if(!Live(target))continue;if(EntityManager.HasComponent<Game.Net.Node>(target)&&!OwnedNode(target))continue;
-   var definition=EntityManager.CreateEntity(typeof(CreationDefinition),typeof(Updated));definitions.Add(definition);
+   var definition=EntityManager.CreateEntity(typeof(CreationDefinition));definitions.Add(definition);
    EntityManager.SetComponentData(definition,new CreationDefinition{m_Original=target,m_Flags=CreationFlags.Delete});
    if(EntityManager.HasComponent<Game.Net.Edge>(target)){
     var edge=EntityManager.GetComponentData<Game.Net.Edge>(target);var c=EntityManager.GetComponentData<Game.Net.Curve>(target);
@@ -145,7 +147,10 @@ public partial class ConstructionTool {
     var t=EntityManager.GetComponentData<Game.Objects.Transform>(target);
     EntityManager.AddComponentData(definition,new ObjectDefinition{m_Position=t.m_Position,m_Rotation=t.m_Rotation,m_Probability=100,m_ParentMesh=-1,m_PrefabSubIndex=-1,m_Scale=1});
    }else throw new InvalidOperationException("Unsupported compound member "+target);
+   yield return 0;
   }
+  using(var publish=new NativeArray<Entity>(definitions.ToArray(),Allocator.Temp))EntityManager.AddComponent<Updated>(publish);
+  yield return 1;
   Trace.Event("plan.demolition.preview","id="+demolitionPlan+" definitions="+definitions.Count);
  }
  bool ValidateDemolition(out string detail){

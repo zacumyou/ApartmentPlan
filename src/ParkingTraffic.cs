@@ -37,8 +37,8 @@ public static class ParkingTraffic {
    var result=new ParkingConnection{Bay=bay,Failure="No full-width aisle with end clearance"};
    if(bay.ParkingSpaces<1||Math.Abs((bay.ParkingAlongX?bay.W:bay.D)-bay.ParkingSpaces*o.BayWidth)>.01||(bay.ParkingAlongX?bay.D:bay.W)<o.BayDepth-.001){result.Failure="Parking axis or stall dimensions inconsistent";plan.ParkingConnections.Add(result);plan.ParkingAccessFailures++;continue;}
    foreach(int side in new[]{-1,1}){
-    bool h=bay.ParkingAlongX;double end=o.ParkingEndClearance;
-    var aisle=h?new Parcel{X=bay.X-end,Y=side<0?bay.Y-o.ParkingAisle:bay.Y+bay.D,W=bay.W+2*end,D=o.ParkingAisle}:new Parcel{X=side<0?bay.X-o.ParkingAisle:bay.X+bay.W,Y=bay.Y-end,W=o.ParkingAisle,D=bay.D+2*end};
+    bool h=bay.ParkingAlongX;double end=o.ParkingEndClearance,lane=bay.ParkingAisleWidth>0?bay.ParkingAisleWidth:o.ParkingAisle;
+    var aisle=h?new Parcel{X=bay.X-end,Y=side<0?bay.Y-lane:bay.Y+bay.D,W=bay.W+2*end,D=lane}:new Parcel{X=side<0?bay.X-lane:bay.X+bay.W,Y=bay.Y-end,W=lane,D=bay.D+2*end};
     if(!Covered(aisle,roads))continue;
     var ports=new List<Point>();bool connected=true;int middle=-1;
     for(int i=0;i<bay.ParkingSpaces;i++){

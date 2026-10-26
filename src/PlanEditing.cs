@@ -35,7 +35,7 @@ public partial class PlanSystem {
   if(d!=null){
    VillaConnections.AddRange(d.VillaConnections??new List<VillaConnection>());Entrances.AddRange(d.Entrances);Zones.AddRange(d.Zones??new List<ManualZone>());Ramps.AddRange(d.Ramps??new List<Parcel>());Roads.AddRange(d.Roads??new List<ManualRoad>());
    Selected.Clear();foreach(var id in d.Selected??new string[0])if(Assets.Any(a=>a.Id==id))Selected.Add(id);
-   Mod.Options.PlanMode=0;Mod.Options.GrassSurfaces=false;Mod.Options.VillaTreeDensity=30;Mod.Options.TreePlacementMode=0;Mod.Options.BuildingPattern=0;Mod.Options.AllowMainTJunctions=true;
+   Mod.Options.ParkingInOpenSpace=false;Mod.Options.PlanMode=0;Mod.Options.GrassSurfaces=false;Mod.Options.VillaTreeDensity=30;Mod.Options.TreePlacementMode=0;Mod.Options.BuildingPattern=0;Mod.Options.AllowMainTJunctions=true;
    foreach(var pair in d.Settings??new Dictionary<string,object>()){var property=typeof(Settings).GetProperty(pair.Key);if(property?.CanWrite==true&&(property.PropertyType.IsPrimitive||pair.Key=="MainNetwork"||pair.Key=="AisleNetwork"||pair.Key=="WalkNetwork"||pair.Key=="TreeSpeciesJson"))try{property.SetValue(Mod.Options,Convert.ChangeType(pair.Value,property.PropertyType,System.Globalization.CultureInfo.InvariantCulture));}catch{}}
    string savedAisle=Mod.Options.AisleNetwork;
    ApplyNetworkPreferences();Draft=d.Draft;RenderDraft();Mode=IsBuilt(stored)?"edit":"preview";
@@ -85,7 +85,7 @@ public partial class PlanSystem {
   if(missingFronts>0){Status="AP.FrontageRecalculate";return;}
   if(Draft.ParkingAccessFailures>0){Status="AP.ParkingAccessIncomplete";return;}
   if(Draft.RequiredAccessFailures>0){Status="AP.AccessIncomplete";return;}
-  CatalogTrees();Save(true);if(EditingPlan<0)return;if(!PrepareCompoundAdditions())return;
+  CatalogTrees();Save(true);if(EditingPlan<0)return;if(CompoundEditing){BeginCompoundReplacement();return;}
   Mode="preview";Status="AP.NativeChecking";World.GetOrCreateSystemManaged<Game.Tools.ToolSystem>().activeTool=World.GetOrCreateSystemManaged<ConstructionTool>();
  }
  internal static List<Point> StoredBoundary(StoredPlan p)=>p.Shapes.Where(s=>s.Kind==7&&Math.Abs(s.Width-.5f)<.001f).Select(s=>new Point(s.A.x,s.A.z)).ToList();

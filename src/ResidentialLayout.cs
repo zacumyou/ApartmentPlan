@@ -12,10 +12,10 @@ internal sealed partial class ResidentialLayout {
  readonly int nx,ny;readonly double cell,x0,y0;readonly int[,] map;
  readonly List<Parcel> exact=new List<Parcel>();
  readonly List<Asset> assets;readonly Parcel entry;
- double floors;int spaces,assetIndex,modules;
+ double floors;int spaces,assetIndex,modules,supplementalRoutes;
  bool BarOrientationAllowed(Parcel p)=>o.BuildingPattern==1?p.W>=p.D-.01:o.BuildingPattern==2?p.D>=p.W-.01:true;
  sealed class Block {
-  public Parcel Bounds;public List<Parcel> Pieces=new List<Parcel>();
+  public bool SupplementalParking;public Parcel Bounds;public List<Parcel> Pieces=new List<Parcel>();
   public List<Parcel> Paving=new List<Parcel>();
   public Dictionary<Parcel,PlanRoute> StreetAxes=new Dictionary<Parcel,PlanRoute>();
   public double MaxConnection=double.MaxValue;public Point Gate;public int Homes;public double FloorArea;public bool LandscapeRemainder;
@@ -99,6 +99,13 @@ internal sealed partial class ResidentialLayout {
  bool RoadCell(int x,int y)=>x>=0&&y>=0&&x<nx&&y<ny&&map[x,y]==1;
  bool Route(Block block){
   Bounds(block.Bounds,out int a,out int b,out int c,out int d);
+  if(block.SupplementalParking){
+   if(supplementalRoutes++>=256)return false;
+   Func<int,int,bool> join=(x,y)=>map[x,y]==1&&(x<a||y<b||x>=c||y>=d);
+   var access=FindRoute(block.Gate,join,o.SupplementalAccessWidth,false,block.MaxConnection);
+   if(access==null||access.Count*cell>block.MaxConnection)return false;
+   DrawRoute(access,o.SupplementalAccessWidth,"aisleWide");return true;
+  }
   double width=o.AccessRoad>0?o.AccessRoad:o.ContinuousFrontage?o.ParkingAisle:o.Road;
   Func<int,int,bool> target=(x,y)=>map[x,y]==1&&(x<a||y<b||x>=c||y>=d);
   // Reserve the wider approach before subsequent courts/parking occupy it.
@@ -191,8 +198,8 @@ internal sealed partial class ResidentialLayout {
   for(int pass=0;pass<2&&!Full;pass++)for(int y=1;y<ny-1&&!Full;y+=2)for(int x=1;x<nx-1&&!Full;x+=2)
    if(map[x,y]==Green)TryBlock(x0+x*cell,y0+y*cell,pass==1,true,false,true);
  }
- Block EdgeBlock(double x,double y,Asset asset,double length,bool rotated){
-  double walk=Snap(o.Walkway),road=Snap(o.Road),bay=Snap(o.BayDepth),rear=Snap(Math.Max(2,o.Gap/2));
+ Block EdgeBlock(double x,double y,Asset asset,double length,bool rotated,double roadWidth=0){
+  double walk=Snap(o.Walkway),road=Snap(roadWidth>0?roadWidth:o.Road),bay=Snap(o.BayDepth),rear=Snap(Math.Max(2,o.Gap/2));
   bool building=asset!=null;
   double depth=building?Math.Min(asset.Width,asset.Depth):bay;
   double width=building?length+2*walk:length+2*road,height=Snap(depth)+walk+road+rear;
@@ -309,7 +316,7 @@ internal sealed partial class ResidentialLayout {
   Stage("grid");
   if(ramps!=null)foreach(var r in ramps){if(!Layout.Contains(r,solver.poly)||!solver.Free(r))throw new ArgumentException("RampFit");solver.Paint(r,Fixed);solver.exact.Add(r);}
   for(int i=1;i<entrances.Count;i++)solver.EntranceParcel(entrances[i]);
-  solver.MainRoads();solver.AddManualRoads(roads);solver.ProtectMainRoad();Stage("mainRoad");solver.ParkingCourtHousing();Stage("housing");solver.AddParkingAisles();solver.SharedFrontageParking();solver.JoinParkingGaps();solver.CloseParkingLoops();solver.RepairFrontageConnections();solver.PreferWideAccess();solver.ReclaimWideParking();solver.FillPavedParkingCourts();Stage("parking");if(o.PedestrianNetwork){solver.OpenSpaceWalks();solver.ConnectWalks();solver.RoundWalkCorners();}Stage("walks");solver.Finish();ParkingTraffic.Validate(p,o);Stage("finish");
+  solver.MainRoads();solver.AddManualRoads(roads);solver.ProtectMainRoad();Stage("mainRoad");solver.ParkingCourtHousing();Stage("housing");solver.AddParkingAisles();solver.SharedFrontageParking();solver.JoinParkingGaps();solver.CloseParkingLoops();solver.RepairFrontageConnections();solver.PreferWideAccess();solver.ReclaimWideParking();solver.FillPavedParkingCourts();solver.FillOpenSpaceParking();Stage("parking");if(o.PedestrianNetwork){solver.OpenSpaceWalks();solver.ConnectWalks();solver.RoundWalkCorners();}Stage("walks");solver.Finish();ParkingTraffic.Validate(p,o);Stage("finish");
   p.Diagnostics="entrances="+entrances.Count+" routes="+p.Routes.Count+" unreachable="+p.UnreachableAccess.Count+" parkingAccessFailures="+p.ParkingAccessFailures;return p;
  }
 }

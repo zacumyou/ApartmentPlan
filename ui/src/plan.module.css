@@ -52,7 +52,7 @@
 
 .roadModes{display:flex;align-items:center;margin:7rem 0}.roadModes .small{flex:0 0 34rem;width:34rem;height:34rem;margin-right:5rem}.roadCount{flex:1;min-width:0;color:#d8e6ec;font-size:11rem;padding:0 6rem}.roadModes .selected{background-color:rgba(46,151,190,.55);border-color:#96deef;animation:none}
 
-.loadingVeil{position:absolute;left:0;right:0;top:0;bottom:0;z-index:30;background-color:rgba(4,9,13,.82);border-radius:10rem;display:flex;align-items:center;justify-content:center;color:#eaf9ff}.loadingCard{display:flex;flex-direction:column;align-items:center;max-width:85%;padding:24rem;text-align:center}.loadingCard>.glyph{width:48rem;height:48rem;margin:0 0 18rem;animation:apSparkle 1.8s ease-in-out infinite}.loadingCard>strong{font-size:17rem;line-height:1.5}.loadingCard>span{margin-top:9rem;color:#aebdc9;font-size:12rem;line-height:1.6}@keyframes apSparkle{0%,100%{opacity:.45;transform:scale(.88) rotate(-8deg)}50%{opacity:1;transform:scale(1.08) rotate(8deg)}}
+.loadingVeil{position:absolute;left:0;right:0;top:0;bottom:0;z-index:30;background-color:rgba(4,9,13,.82);border-radius:10rem;display:flex;align-items:center;justify-content:center;color:#eaf9ff}.loadingCard{display:flex;flex-direction:column;align-items:center;max-width:85%;padding:24rem;text-align:center}.loadingCard>strong{font-size:17rem;line-height:1.5}.loadingCard>span{margin-top:9rem;color:#aebdc9;font-size:12rem;line-height:1.6}
 .landscape{left:24rem;right:auto;top:110rem;width:410rem;height:75vh;z-index:110}.landscape .header>.glyph{margin-right:10rem}.landscapeSettings{border:0;padding:0;margin:12rem 0;min-width:0}.treeAges{display:flex;flex-wrap:wrap;justify-content:space-between}.treeAges>.check{width:49%;margin-bottom:6rem}.landscape .asset{height:110rem}.landscape .assetName{white-space:normal;word-break:break-word}.landscape .quantity{white-space:nowrap}.landscape .check{margin-bottom:6rem}
 .landscape .asset{width:32%;height:118rem}.landscape .assetImage{height:44rem}.landscape .assetName{font-size:11rem;line-height:1.4}
 
@@ -137,7 +137,7 @@
 .loadingVeil{animation:apLoadingEnter .22s ease-out both}
 .loadingVeil.loadingExit{animation:apLoadingExit .18s ease-in both;pointer-events:none}
 .loadingFill{transition:width .3s ease-out}
-.loadingCard>.glyph{animation-duration:2.4s}
+
 .indeterminate{animation-duration:2s}
 @keyframes apLoadingEnter{from{opacity:0}to{opacity:1}}
 @keyframes apLoadingExit{from{opacity:1}to{opacity:0}}
@@ -145,4 +145,19 @@
 .panel .demolishCompound>span{color:#ffd6d6!important}
 .panel .demolishCompound:hover:not(:disabled){background-color:rgba(199,60,70,.58);border-color:#ffadb3}
 .demolishCompound>.glyph{filter:sepia(1) saturate(4) hue-rotate(305deg)}
-@media(prefers-reduced-motion:reduce){.loadingVeil,.loadingVeil.loadingExit,.loadingCard>.glyph,.indeterminate{animation:none}.loadingFill{transition:none}.loadingVeil.loadingExit{opacity:0}}
+@media(prefers-reduced-motion:reduce){.loadingVeil,.loadingVeil.loadingExit,.loadingStars>img,.roadConfirm,.indeterminate{animation:none}.loadingFill{transition:none}.loadingVeil.loadingExit{opacity:0}}
+
+/* Two equal columns, with explicit label/value separation in Gameface. */
+.legend,.deficitGrid{display:flex;flex-wrap:wrap;width:100%}
+.legend>div,.deficitGrid>.deficit{width:50%;box-sizing:border-box;padding:9rem 8rem;min-width:0;margin:0}
+.legend>div>span:not(.quantity),.deficit>span{flex-grow:1;flex-shrink:1;flex-basis:0;text-align:left;word-break:break-word;padding-right:0}
+.legend .quantity,.deficit>b{margin-left:10rem;flex-shrink:0;text-align:right}
+.legend i{width:8rem;height:8rem;margin-right:5rem}
+.deficit>b{display:flex;justify-content:flex-end}
+.panel .roadConfirm{border-color:#72b5c5;animation:activeTogglePulse 2.4s ease-in-out infinite}
+.loadingStars{position:relative;display:block;width:48rem;height:48rem;margin:0 0 18rem;flex-shrink:0}
+.loadingStars>img{position:absolute;animation:apStarBreathe 2.6s ease-in-out infinite}
+.loadingStarLarge{width:38rem;height:38rem;left:0;bottom:0}
+.loadingStars>.loadingStarSmall{width:18rem;height:18rem;right:0;top:0;animation-duration:2.1s;animation-delay:-1.1s}
+@keyframes apStarBreathe{0%,100%{opacity:.5;transform:scale(.9)}50%{opacity:1;transform:scale(1.08)}}
+@media(prefers-reduced-motion:reduce){.loadingStars>img,.panel .roadConfirm{animation:none}}

@@ -13,7 +13,7 @@ add("AP.AdditionsSlabOnly","Additions currently support slab apartment compounds
 add("AP.AdditionSaveLimit","This addition exceeds the compound save budget.","단지 변경 기록의 저장 한도를 초과합니다.");
 add("AP.EditCompound","Edit compound","단지 편집");
 add("AP.EditCompoundHint","Edit the saved compound plan. Existing facilities remain until you explicitly apply additions.","기존 시설을 유지하며 변경 계획을 편집합니다. 추가 대상은 미리보기 후 직접 적용합니다.");
-add("AP.CompoundPendingSaved","Changes saved. Preview additions to apply them; existing facilities are retained.","변경 계획 저장됨. 추가 미리보기에서 적용할 수 있습니다. 기존 시설은 유지됩니다.");
+add("AP.CompoundPendingSaved","Changes saved. Start replacement to remove the old facilities after confirmation and preview the revised plan.","변경 계획 저장됨. 단지 수정 배치를 시작하면 확인 후 기존 시설을 삭제하고 새 계획을 미리 봅니다.");
 add("AP.NoCompoundAdditions","No additional facilities fit without overlapping existing facilities.","기존 시설과 겹치지 않는 추가 시설이 없습니다.");
 add("AP.PreviewAdditions","Preview additions","추가 미리보기");
 add("AP.ApplyAdditions","Apply additions","추가 적용");
@@ -38,7 +38,7 @@ add("AP.Tower.RulesHint","Entrance: four-lane road. Internal roads: Alley. Turna
 add("AP.Tower.EntranceFit","Not enough space for the selected parking asset and turnaround. Move the gate or choose a smaller asset.","선택 주차장과 회차 공간이 들어가지 않습니다. 입구를 옮기거나 더 작은 에셋을 선택하세요.");
 add("AP.Tower.ConnectionFit","No safe road connection between towers and entrances. Adjust the boundary or selected assets.","동과 출입구 사이에 도로를 연결할 공간이 없습니다. 구역이나 선택 에셋을 조정하세요.");
 add('AP.Villa.TileLots','Replace villa surfaces with 2x2 tiles','빌라 표면을 2×2 타일로 교체');
-add('AP.Villa.TileLotsHint','Preserve Clip areas, remove other owned surfaces, and place a rotated 16x16 m tile surface. Source assets are unchanged.','Clip 영역은 보존하고 나머지 소유 Surface를 제거한 뒤 건물 방향에 맞춘 16×16m 타일로 교체합니다. 원본 에셋은 변경하지 않습니다.');
+add('AP.Villa.TileLotsHint','Preserve Clip areas, remove other owned surfaces, and place a rotated 16x16 m tile surface. Source assets are unchanged.','Clip 영역은 보존하고 나머지 소유 표면을 제거한 뒤 건물 방향에 맞춘 16×16m 타일로 교체합니다. 원본 에셋은 변경하지 않습니다.');
 add('AP.Villa.NoThrough','No main road can connect external roads on different sides. Review the approved connections or site.','서로 다른 방향의 외부 도로를 잇는 중앙도로를 확보하지 못했습니다. 허용 연결점이나 구역을 수정하세요.');
 add('AP.Villa.EmptyBlock','A road-enclosed block contains no housing. Adjust spacing or the boundary.','내부 도로로 둘러싸인 공간 중 주택이 없는 곳이 있습니다. 간격이나 경계를 조절하세요.');
 add('AP.Villa.FollowBoundary','Follow boundary with curved alleys','테두리를 따라 곡선 골목 배치');
@@ -76,8 +76,8 @@ add("AP.LimitZones","Manual zone limit: {current} including this zone / maximum 
 add("AP.LimitRoads","Manual road limit: {current} including this road / maximum {maximum}.","수동 도로 개수 한도: 이번 도로 포함 {current}개 / 최대 {maximum}개.");
 add("AP.LimitSiteArea","Site area limit: {current} m² / maximum {maximum} m².","구역 면적 한도: {current}㎡ / 최대 {maximum}㎡.");
 add("AP.LimitSiteExtent","Site dimension limit: {current} m / maximum {maximum} m.","구역 가로·세로 길이 한도: 긴 변 {current}m / 최대 {maximum}m.");
-add('AP.GrassSurfaces','Grass surfaces in leftover spaces','빈자리 잔디 Surface');
-add('AP.GrassSurfacesHint','Add native grass surfaces to small leftover spaces. Separate from Grass Sprites.','작은 빈자리 공간에 잔디 Surface를 추가합니다. Grass Sprites와 별개입니다.');
+add('AP.GrassSurfaces','Grass surfaces in leftover spaces','빈자리 잔디 표면');
+add('AP.GrassSurfacesHint','Add native grass surfaces to small leftover spaces. Separate from Grass Sprites.','작은 빈자리 공간에 잔디 표면을 추가합니다. Grass Sprites와 별개입니다.');
 add('AP.SearchRoads','Search roads (including Road Builder)','도로 검색 (Road Builder 포함)');
 // Stable prefab IDs are shared with old saves; only visible names are localized.
 add('AP.RoadPackMissing','AP Invisible Road Pack is missing or not ready. Install/enable the asset pack and restart the game.','AP 투명도로 팩이 없거나 준비되지 않았습니다. 에셋 팩을 설치·활성화한 뒤 게임을 다시 실행하세요.');
@@ -227,7 +227,7 @@ add("AP.CornerMode.0","Curves preferred","곡선 우선, 직각 허용");
 add("AP.CornerMode.1","Curves only","곡선만");
 add("AP.CornerMode.2","Right angles","직각");
 add("AP.Desc.MainRoadCurveRadius","Preferred curve radius. In automatic mode, corners that cannot fit a curve may use right angles.","목표 곡선 반경입니다. 자동 모드에서는 곡선이 들어가지 않는 코너에 직각을 허용합니다.");
-add("AP.BoundaryDrag","Drag a vertex or edge. In entrance mode, click without dragging to place a gate.","꼭짓점이나 변을 드래그해 수정하세요. 입구 모드에서는 짧게 클릭하면 입구가 생깁니다.");
+add("AP.BoundaryDrag","Drag a vertex to edit. Pick an edge to insert a vertex. In entrance mode, click to place a gate.","꼭짓점을 드래그해 수정하세요. 변을 잡으면 꼭짓점이 추가됩니다. 입구 모드에서는 클릭하면 입구가 생깁니다.");
 add("AP.NoBuildingFit","No selected building fits these conditions. Try a smaller lot, a larger boundary, or adjust spacing in Options.","현재 조건에 들어가는 동이 없습니다. 더 작은 에셋, 더 넓은 구역 또는 간격 설정을 확인하세요.");
 add('AP.Networks','Native networks','실제 도로·보도');
 add('AP.Network.main','Main road','메인 도로');add('AP.Network.aisle','Court access road','주차 마당 연결도로');add('AP.Network.pedestrian','Pedestrian path','보행로');
@@ -366,8 +366,8 @@ add('AP.GrassUnavailable','Grass integration could not finish; see log','잔디 
 add('AP.GrassInterrupted','Grass painting stopped','잔디 적용이 중단되었습니다.');
 add('AP.Native.Trees','Trees','나무');
 add('AP.TileLots','Tile building lots','건물 부지 타일 포장');
-add('AP.TileLotsHint','Replace surfaces belonging to new AP buildings only. Original asset files and other buildings are unchanged.','새로 배치하는 AP 건물에 속한 surface를 제거하고 부지를 타일로 채웁니다.');
-add('AP.SurfaceRadius','Exposed surface corner radius','노출된 surface 모서리 반경');
+add('AP.TileLotsHint','Replace surfaces belonging to new AP buildings only. Original asset files and other buildings are unchanged.','새로 배치하는 AP 건물에 속한 표면을 제거하고 부지를 타일로 채웁니다.');
+add('AP.SurfaceRadius','Exposed surface corner radius','노출된 표면 모서리 반경');
 add('AP.Native.CarJunctions','Vehicle junctions','차량 교차로');
 add('AP.Native.CarJunctionMissing','Vehicle entry or exit lane is missing. See the junction audit.','차량 진입 또는 진출 차로가 없습니다. 교차로 검사 로그를 확인하세요.');
 add('AP.BuildingPattern','Building arrangement','건물 배치 방식');
@@ -441,8 +441,19 @@ add('AP.MigrationSkipped','Excluded','제외');
 add('AP.MigrationDone','Updated','처리');
 add('AP.RoadPackMissing','AP road assets were not loaded by the game. Check the asset loading log.','게임에서 AP 도로 에셋을 불러오지 못했습니다. 에셋 로딩 로그를 확인하세요.');
 add('AP.RoadAssetsInvalid','Some AP road assets are missing or failed initialization. Details were logged.','일부 AP 도로 에셋이 누락되었거나 초기화 검사를 통과하지 못했습니다. 상세 내용을 로그에 기록했습니다.');
+add('AP.ParkingInOpenSpace','Use open space for missing parking','유휴부지에 부족한 주차장 추가');
+add('AP.ParkingInOpenSpaceHint','Use unreserved green space for connected parking when spaces or parking area are insufficient. Preserves manual zones and boundary greenery. Recalculate to preview.','주차 면수 또는 면적이 부족하면 연결 가능한 공원 등 유휴부지에 주차장을 추가합니다. 직접 지정한 구역과 경계 녹지는 보존합니다. 계산 후 계획도에서 확인하세요.');
+add('AP.PreviewReplacement','Start compound replacement','단지 수정 배치 시작');
+add('AP.ApplyReplacement','Confirm replacement','수정 배치 확정');
+add('AP.ReplaceCompoundMessage','Delete this compound’s existing facilities, then prepare the revised layout? Residents will be displaced. Deletion cannot be undone. Nearby facilities are preserved. Check the new preview and confirm placement afterwards.','기존 단지 시설을 삭제하고 수정 계획으로 다시 배치할까요? 거주민이 이주하며 삭제는 되돌릴 수 없습니다. 주변 시설은 유지됩니다. 삭제 후 새 미리보기를 확인하고 배치를 확정하세요.');
+add('AP.ReplacementPreparing','Preparing the revised layout after demolition.','기존 단지 삭제 후 수정 배치를 준비합니다.');
+add('AP.ReplacementProtectedRoad','An existing road cannot be safely removed. Replacement was stopped; the compound is unchanged.','안전하게 삭제할 수 없는 기존 도로가 있어 수정 배치를 중단했습니다. 단지는 유지됩니다.');
+add('AP.EditCompoundHint','Edit this compound’s plan. Applying it removes the old facilities after confirmation.','단지 계획을 수정합니다. 수정 배치 시 확인 후 기존 단지 시설을 삭제합니다.');
+add('AP.ClosePlanTitle','Discard unsaved changes?','저장하지 않은 변경사항을 버릴까요?');
+add('AP.ClosePlanMessage','Closing will discard this unsaved plan or changes. Previously saved plans and built facilities will remain. Close without saving?','닫으면 저장하지 않은 계획이나 변경사항이 사라집니다. 이미 저장한 계획과 설치된 시설은 유지됩니다. 저장하지 않고 닫을까요?');
 for(const data of [en,ko])for(const key of Object.keys(data))data[key]=data[key].replace(/²/g,"2").replace(/[·•]/g,",").replace(/×/g,"x").replace(/−/g,"-").replace(/±/g,"+/-").replace(/–/g,"-");
 for(const [name,data]of [['en-US',en],['ko-KR',ko]])fs.writeFileSync(path.join(root,'lang',name+'.json'),JSON.stringify(data,null,2));
+
 
 
 

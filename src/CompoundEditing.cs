@@ -5,6 +5,36 @@ using Game.Common;
 using Unity.Entities;
 namespace ApartmentPlan {
 public partial class PlanSystem {
+ int replacementPlan=-1,replacementPreviewFrames;
+ internal bool ReplacingCompound(int id)=>replacementPlan==id;
+ void CancelCompoundReplacement(){replacementPlan=-1;replacementPreviewFrames=0;}
+ void TickCompoundReplacement(){
+  if(replacementPreviewFrames>0&&--replacementPreviewFrames==0){replacementPlan=-1;Request("nativePreview");}
+ }
+ bool BeginCompoundReplacement(){
+  var stored=Saved.Find(p=>p.Info.Number==EditingPlan);
+  if(stored==null||!EntityManager.HasBuffer<PlanOwnedEntity>(stored.Entity)){Status="AP.NoOwnership";return false;}
+  int shapes=Saved.Where(p=>p.Info.Number!=EditingPlan).Sum(p=>p.Shapes.Count)+Preview.Count+Boundary.Count;
+  if(shapes>PlanLimits.TotalShapes){SetLimit("AP.LimitTotalShapes",shapes,PlanLimits.TotalShapes);return false;}
+  if(!SaveCompoundPending(false)||stored.Edit?.Pending==null)return false;
+  replacementPlan=EditingPlan;
+  // Resume a saved pending edit if deletion finished before the metadata checkpoint.
+  if(!HasOwnedObjects(stored)){FinishCompoundReplacement(stored);return true;}
+  SelectedPlan=EditingPlan;BeginDemolition();
+  if(SelectedPlan>=0){CancelCompoundReplacement();return false;}return true;
+ }
+ bool FinishCompoundReplacement(StoredPlan stored){
+  if(!ReplacingCompound(stored.Info.Number))return false;
+  // Keep the same plan entity and its pending edit. City saves retain the plan even
+  // if construction is cancelled or the game exits after demolition.
+  var edit=stored.Edit?.Pending;if(edit==null){Status="AP.Error";CancelCompoundReplacement();return true;}
+  edit.Pending=null;edit.AppliedPlans=null;edit.NativeCommitted=false;WriteCompoundEdit(stored,edit);
+  if(EntityManager.HasComponent<PlanConstructionState>(stored.Entity))EntityManager.SetComponentData(stored.Entity,new PlanConstructionState{Applied=0});
+  if(EntityManager.HasBuffer<PlanBuiltRoad>(stored.Entity))EntityManager.GetBuffer<PlanBuiltRoad>(stored.Entity).Clear();
+  if(EntityManager.HasComponent<PlanGrassWork>(stored.Entity))EntityManager.RemoveComponent<PlanGrassWork>(stored.Entity);
+  NativeCommitted=false;Save(true);Activate();replacementPreviewFrames=3;Status="AP.ReplacementPreparing";Revision++;
+  Trace.Event("plan.replacement.cleared","id="+stored.Info.Number);return true;
+ }
  Plan compoundFullDraft;internal bool CompoundApplying=>compoundFullDraft!=null;
  internal bool CompoundEditing=>EditingPlan>=0&&Saved.Any(p=>p.Info.Number==EditingPlan&&IsBuilt(p));
  internal List<Plan> AppliedCompoundPlans(){var stored=Saved.Find(p=>p.Info.Number==EditingPlan);return stored?.Edit?.AppliedPlans??new List<Plan>{stored?.Edit?.Draft};}

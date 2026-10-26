@@ -17,6 +17,7 @@ public partial class PlanSystem {
   var d=stored.Edit?.Draft;if(d==null||d.VillaExistingRoadsOnly||use=="pedestrian")return "";
   if(d.Tower)return d.TowerAlgorithmVersion==0?"AP Invisible Road Path - 1xTwoway":use=="turnaround"?"AP Invisible Road Path - 1xOneway":"";
   if(d.Villa)return "";
+  if(use=="parkingTwoWay")return "AP Invisible Road Path - 1xTwoway";
   if(use=="aisleWide")return "AP Invisible Road Path - 2xTwoway";
   object value;return stored.Edit.Settings!=null&&stored.Edit.Settings.TryGetValue(use=="main"?"MainNetwork":"AisleNetwork",out value)?Convert.ToString(value):"";
  }

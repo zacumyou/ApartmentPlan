@@ -9,6 +9,12 @@ public static class BoundaryEditing {
   for(int i=0;i<points.Count;i++){double d=(BoundarySnap.Nearest(cursor,new SnapEdge(points[i],points[(i+1)%points.Count],0))-cursor).Length;if(d<best){best=d;result=i;edge=true;}}
   return result;
  }
+ public static int Insert(List<Point> points,Point cursor,double radius=3.5){
+  int index=Hit(points,cursor,true,out bool edge,radius);if(index<0||!edge||points.Count>=128)return -1;
+  var point=BoundarySnap.Nearest(cursor,new SnapEdge(points[index],points[(index+1)%points.Count],0));
+  var candidate=new List<Point>(points);candidate.Insert(index+1,point);
+  if(!Layout.Valid(candidate))return -1;points.Insert(index+1,point);return index+1;
+ }
  public static void Move(IList<Point> original,IList<Point> target,int index,bool edge,Point delta){
   for(int i=0;i<original.Count;i++)target[i]=original[i];
   target[index]=original[index]+delta;if(edge)target[(index+1)%target.Count]=original[(index+1)%target.Count]+delta;

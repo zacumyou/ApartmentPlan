@@ -53,7 +53,7 @@ public partial class ConstructionTool:ToolBaseSystem {
    if(!submitted){
     if(frame++==0){if(!Demolishing)EnablePreviewAnarchy();applyMode=ApplyMode.Clear;return deps;}
     if(!deps.IsCompleted)return deps;deps.Complete();
-    if(Demolishing){SubmitDemolition();submitted=true;frame=0;Status("AP.NativeChecking");return deps;}
+    if(Demolishing){if(previewWork==null)previewWork=new FrameWork(SubmitDemolition());if(!AdvanceWork())return deps;submitted=true;frame=0;Status("AP.NativeChecking");return deps;}
     if(s.Draft==null)throw new InvalidOperationException("Draft unavailable");
     if(previewWork==null){validation=new ValidationResult();previewWork=new FrameWork(PreparePreview(s,validation));Status("AP.NativeChecking");}
     if(!AdvanceWork())return deps;
@@ -156,7 +156,7 @@ public partial class ConstructionTool:ToolBaseSystem {
   // Resolve generated edges only after the native preview exists; all remain Temp
   // until a single explicit Apply. Recheck after regeneration before validation.
   var aisle=s.Network("aisle");if(aisle==null)throw new InvalidOperationException("Parking aisle unavailable");
-  var aisleTypes=new[]{aisle,s.Network("aisleWide")}.Where(n=>n!=null).GroupBy(n=>n.Entity).ToDictionary(g=>g.Key,g=>g.First().Width);
+  var aisleTypes=new[]{aisle,s.Network("aisleWide"),s.Network("parkingOneWay"),s.Network("parkingTwoWay")}.Where(n=>n!=null).GroupBy(n=>n.Entity).ToDictionary(g=>g.Key,g=>g.First().Width);
   parkingChanged=false;temps.CompleteDependency();
   var candidates=new SpatialLookup<ConnectionCandidate>(16);
   using(var entities=temps.ToEntityArray(Allocator.Temp))foreach(var edge in entities){

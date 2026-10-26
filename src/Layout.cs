@@ -44,7 +44,7 @@ public static class BuildingPlacement {
 public sealed class Parcel {
  public Point? PlacementForward;public Parcel CompactBounds;public Point[] PlacementOutline;
  public bool InvisibleRoad;public int ParkingEntrySide;public Parcel Frontage;public int ClusterId=-1;public Point? Access;public bool AccessEstimated=true;
- public int Kind; public double X,Y,W,D; public string AssetId=""; public double FloorArea; public int Homes;public int ParkingSpaces;public bool ParkingAlongX=true;
+ public int Kind; public double X,Y,W,D; public string AssetId=""; public double FloorArea; public int Homes;public int ParkingSpaces;public double ParkingAisleWidth;public bool ParkingAlongX=true;
  public double Area=>W*D;
  public Point[] Corners=>new[]{new Point(X,Y),new Point(X+W,Y),new Point(X+W,Y+D),new Point(X,Y+D)};
 }
@@ -85,7 +85,7 @@ public sealed class LayoutOptions {
  public double ParallelGap=24,MainParkingSetback=4,MainCurveRadius=16;public bool MixedDirections=true;
  public double BayWidth=2.5,BayDepth=5,ParkingAisle=6,Walkway=3;
  public bool WideSlabParking=true;public double SurfaceParkingShare=.4,ParkingIsland=0;public int MaxParkingAisles=3;
- public bool EdgeInfill=true;
+ public bool EdgeInfill=true;public bool ParkingInOpenSpace;public double SupplementalTwoWayWidth=4,SupplementalAccessWidth=8;
  public bool AlignBlocks=true;
  public bool RespectTargetFar=false;
  public double TurnClearance=6;public bool PedestrianNetwork=true;

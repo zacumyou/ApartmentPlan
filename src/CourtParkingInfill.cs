@@ -3,6 +3,33 @@ using System.Collections.Generic;
 using System.Linq;
 namespace ApartmentPlan {
 internal sealed partial class ResidentialLayout {
+ // Optional bounded pass: only unreserved green space, with native-connected aisles.
+ void FillOpenSpaceParking(){
+  if(!o.ParkingInOpenSpace)return;
+  double area=exact.Where(p=>p.Kind==2).Sum(p=>p.Area);int attempts=0,added=0;
+  bool Needed()=>spaces+0.001<plan.Homes*o.ParkingPerHome||area+0.001<plan.Area*o.Parking;
+  foreach(double wanted in new[]{40d,25d,15d})for(int rotation=0;rotation<2;rotation++)
+   for(int y=1;y<ny-1;y+=3){o.Cancellation.ThrowIfCancellationRequested();for(int x=1;x<nx-1;x+=3){
+    if(!Needed()||added>=48||attempts>=12000)return;
+    if(map[x,y]!=Green||reserved[x,y]||edgeGreen[x,y])continue;
+    attempts++;double length=Math.Floor(wanted/o.BayWidth)*o.BayWidth;
+    if(length<o.BayWidth*4)continue;
+    var block=SupplementalParkingBlock(x0+x*cell,y0+y*cell,length,rotation==1);
+    if(Place(block)){area+=block.Pieces.Where(p=>p.Kind==2).Sum(p=>p.Area);added++;}
+   }}
+ }
+ Block SupplementalParkingBlock(double x,double y,double run,bool rotated){
+  double lane=Snap(o.SupplementalTwoWayWidth),wide=Snap(o.SupplementalAccessWidth),bay=Snap(o.BayDepth),end=Snap(Math.Max(wide,o.ParkingEndClearance)),rear=Snap(Math.Max(2,(wide-lane)/2));
+  double width=run+2*end,center=rear+bay+lane/2,height=center+wide/2;
+  Point P(double u,double v)=>new Point(x+(rotated?v:u),y+(rotated?u:v));
+  Parcel R(double u,double v,double w,double h,int kind)=>new Parcel{Kind=kind,X=x+(rotated?v:u),Y=y+(rotated?u:v),W=rotated?h:w,D=rotated?w:h,ParkingAlongX=!rotated};
+  var block=new Block{SupplementalParking=true,Bounds=R(0,0,width,height,8),MaxConnection=32,Gate=P(wide/2,center)};
+  var street=R(0,center-lane/2,width,lane,1);block.Pieces.Add(street);
+  block.StreetAxes[street]=new PlanRoute{Use="parkingTwoWay",Width=o.SupplementalTwoWayWidth,Points=new List<Point>{P(wide/2,center),P(width-lane/2,center)}};
+  var apron=R(0,center-wide/2,wide,wide,1);block.Pieces.Add(apron);
+  block.StreetAxes[apron]=new PlanRoute{Use="aisleWide",Width=o.SupplementalAccessWidth,Points=new List<Point>{P(wide/2,center)}};
+  var row=R(end,rear,run,bay,2);row.ParkingSpaces=(int)Math.Round(run/o.BayWidth);row.ParkingAisleWidth=o.SupplementalTwoWayWidth;block.Pieces.Add(row);return block;
+ }
  // Housing has already had its infill pass. Consume only enclosed paved courts,
  // independently of the minimum parking quota, never a park or perimeter strip.
  void FillPavedParkingCourts(){

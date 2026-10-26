@@ -17,13 +17,13 @@ public partial class PlanTool:ToolBaseSystem {
  public override PrefabBase GetPrefab()=>null;
  public override bool TrySetPrefab(PrefabBase prefab)=>false;
  int hoverEntrance=-1,hoverParcel=-1,hoverZone=-1,hoverZoneVertex=-1;
- int drag=-1;bool edgeDrag,dragMoved;int hover=-1;bool hoverEdge;string dragMode;Point dragOrigin;List<Point> original,originalEntrances;Point referenceAxis=new Point(1,0);int lastCount;
+ List<Point> beforeInsert;int drag=-1;bool edgeDrag,dragMoved;int hover=-1;bool hoverEdge;string dragMode;Point dragOrigin;List<Point> original,originalEntrances;Point referenceAxis=new Point(1,0);int lastCount;
  internal string Hint="";
  bool pendingPress,clearPreview;Vector2 pressScreen;
  void CapturePress(Game.Input.ProxyAction action,InputActionPhase phase){if(phase==InputActionPhase.Started&&Mouse.current!=null){pressScreen=Mouse.current.position.ReadValue();pendingPress=true;}}
  bool GroundAtScreen(Vector2 screen,float elevation,out Point point){point=default;var camera=World.GetExistingSystemManaged<CameraUpdateSystem>()?.activeCamera;if(camera==null)return false;var ray=camera.ScreenPointToRay(screen);if(!new Plane(Vector3.up,new Vector3(0,elevation,0)).Raycast(ray,out float distance))return false;var p=ray.GetPoint(distance);point=new Point(p.x,p.z);return true;}
  protected override void OnStartRunning(){Trace.Event("tool.start");base.OnStartRunning();clearPreview=true;applyActionOverride=Mod.Options.GetAction("Click");secondaryApplyActionOverride=Mod.Options.GetAction("Back");pendingPress=false;applyAction.onInteraction+=CapturePress;applyAction.shouldBeEnabled=true;secondaryApplyAction.shouldBeEnabled=true;cacheTime=-10;}
- void CancelDrag(PlanSystem s){if(drag>=0&&s!=null&&original!=null&&s.Boundary.Count==original.Count){s.Boundary.Clear();s.Boundary.AddRange(original);s.Entrances.Clear();s.Entrances.AddRange(originalEntrances);s.Entrance=s.Entrances.Count>0?(Point?)s.Entrances[0]:null;Trace.Event("boundary.drag.cancel");}drag=-1;original=null;originalEntrances=null;dragMoved=false;}
+ void CancelDrag(PlanSystem s){if(drag>=0&&s!=null&&original!=null&&s.Boundary.Count==original.Count){s.Boundary.Clear();s.Boundary.AddRange(beforeInsert??original);s.Entrances.Clear();s.Entrances.AddRange(originalEntrances);s.Entrance=s.Entrances.Count>0?(Point?)s.Entrances[0]:null;Trace.Event("boundary.drag.cancel");}drag=-1;original=null;originalEntrances=null;beforeInsert=null;dragMoved=false;}
  protected override void OnStopRunning(){CancelDrag(World.GetExistingSystemManaged<PlanSystem>());pendingPress=false;fillPreview.Clear();fillTime=-10;fillRoadTime=-10;applyAction.onInteraction-=CapturePress;Hint="";Trace.Event("tool.stop");applyAction.shouldBeEnabled=false;secondaryApplyAction.shouldBeEnabled=false;base.OnStopRunning();}
  public override void InitializeRaycast(){base.InitializeRaycast();m_ToolRaycastSystem.typeMask=TypeMask.Terrain;m_ToolRaycastSystem.collisionMask=CollisionMask.OnGround;}
  protected override JobHandle OnUpdate(JobHandle deps){applyMode=clearPreview?ApplyMode.Clear:ApplyMode.None;clearPreview=false;var s=World.GetExistingSystemManaged<PlanSystem>();if(s==null)return deps;if(drag>=0&&s.Boundary.Count!=original.Count){drag=-1;original=null;}bool blocked=s.CatalogLoading||s.LayoutPending||!s.Open||s.Focused||!Application.isFocused||Game.Input.InputManager.instance.hasInputFieldFocus||Game.Input.InputManager.instance.overlayActive;
@@ -52,7 +52,7 @@ public partial class PlanTool:ToolBaseSystem {
   // the cursor. The terrain raycast can otherwise report only its final point.
   if(drag<0&&capturedPress&&s.Mode!="boundary"&&GroundAtScreen(pressScreen,s.Elevation,out var start)){
    int picked=BoundaryEditing.Hit(s.Boundary,start,true,out bool pickedEdge);
-   if(picked>=0){drag=picked;edgeDrag=pickedEdge;dragMoved=false;dragMode=s.Mode;original=new List<Point>(s.Boundary);originalEntrances=new List<Point>(s.Entrances);dragOrigin=start;Trace.Event("boundary.drag.begin","index="+drag+" edge="+edgeDrag+" mode="+dragMode+" event=true");}
+   if(picked>=0)BeginBoundaryDrag(s,picked,pickedEdge,start);
   }
   if(drag>=0){
    if(Mouse.current!=null&&GroundAtScreen(Mouse.current.position.ReadValue(),s.Elevation,out var current))raw=current;
@@ -66,11 +66,11 @@ public partial class PlanTool:ToolBaseSystem {
     s.Entrance=s.Entrances.Count>0?(Point?)s.Entrances[0]:null;
    }
    if(!applyAction.IsPressed()){
-    bool changed=dragMoved;bool clickEntrance=!changed&&dragMode=="entrance";
+    bool changed=dragMoved||beforeInsert!=null;bool clickEntrance=!changed&&dragMode=="entrance";
     bool valid=s.Mode=="boundary"?Layout.ValidOpen(s.Boundary):Layout.Valid(s.Boundary);
     if(valid&&s.Mode!="boundary")foreach(var zone in s.Zones)if(!SiteFrame.ContainsPolygon(s.Boundary,zone.Points)){valid=false;break;}
     if(!changed||!valid){CancelDrag(s);if(changed){s.Status="AP.InvalidBoundary";s.Revision++;}}
-    else{Trace.Event("boundary.drag.commit","index="+drag+" edge="+edgeDrag+" mode="+dragMode);drag=-1;original=null;originalEntrances=null;dragMoved=false;s.BoundaryEdited();s.Sound(PlanSound.Point);}
+    else{Trace.Event("boundary.drag.commit","index="+drag+" edge="+edgeDrag+" mode="+dragMode);drag=-1;original=null;originalEntrances=null;beforeInsert=null;dragMoved=false;s.BoundaryEdited();s.Sound(PlanSound.Point);}
     if(clickEntrance)s.Click(WorldPoint(dragOrigin,hit.m_HitPosition.y));
    }
    Hint="AP.BoundaryDrag";DrawOutline(s,null,false);return deps;
@@ -82,13 +82,22 @@ public partial class PlanTool:ToolBaseSystem {
   if(applyAction.WasPressedThisFrame()&&drag<0){
    if(snap.Close){if(validCandidate)s.Request("finish");else Trace.Event("boundary.close.rejected","invalid polygon");}
    else {
-    if(hover>=0){drag=hover;edgeDrag=hoverEdge;dragMoved=false;dragMode=s.Mode;original=new List<Point>(s.Boundary);originalEntrances=new List<Point>(s.Entrances);dragOrigin=raw;Trace.Event("boundary.drag.begin","index="+drag+" edge="+edgeDrag+" mode="+dragMode);}
+    if(hover>=0)BeginBoundaryDrag(s,hover,hoverEdge,raw);
     else if(s.Mode=="boundary"&&validCandidate){if(s.Boundary.Count==0&&snap.Axis.Length>.5)referenceAxis=snap.Axis;s.Click(WorldPoint(snap.Position,hit.m_HitPosition.y));}
     else if(s.Mode=="entrance")s.Click(hit.m_HitPosition);
     else Trace.Event("boundary.point.rejected","mode="+s.Mode+" selfCross="+!validCandidate);
    }
   }
   s.Elevation=hit.m_HitPosition.y;DrawOutline(s,snap,validCandidate);return deps;
+ }
+ void BeginBoundaryDrag(PlanSystem s,int picked,bool edge,Point cursor){
+  beforeInsert=null;
+  if(edge&&(s.Mode=="edit"||s.Mode=="preview")){
+   var previous=new List<Point>(s.Boundary);int inserted=BoundaryEditing.Insert(s.Boundary,cursor);
+   if(inserted<0)return;beforeInsert=previous;picked=inserted;edge=false;
+  }
+  drag=picked;edgeDrag=edge;dragMoved=false;dragMode=s.Mode;original=new List<Point>(s.Boundary);originalEntrances=new List<Point>(s.Entrances);dragOrigin=cursor;
+  Trace.Event("boundary.drag.begin","index="+drag+" inserted="+(beforeInsert!=null)+" mode="+dragMode);
  }
  void UpdateHover(PlanSystem s,Point p){
   for(int i=0;i<s.ZonePoints.Count;i++)if((s.ZonePoints[i]-p).Length<3){hoverZoneVertex=i;break;}
