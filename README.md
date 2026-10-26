@@ -83,3 +83,5 @@ These are optional examples, not mandatory dependencies or a guarantee for every
 A limited diagnostic summary is sent to the developer's site database only after you press Share and consent to the notice. There are no automatic submissions. Reports include versions, error codes, editing/calculation state, object counts and validation metrics. They exclude full logs, account names, file paths, asset names, coordinates and save files. Transmission uses HTTPS. The server receives your IP but uses a daily HMAC identifier for rate limiting and does not store the raw IP in the diagnostic database. Hosting access logs may separately retain it.
 
 [Source and issue reports](https://github.com/zacumyou/ApartmentPlan)
+
+[Paradox Mods](https://mods.paradoxplaza.com/mods/165052/Windows) · [Discussion / 피드백](https://forum.paradoxplaza.com/forum/threads/mod-alpha-apartment-plan-apartment-complexes-discussion-feedback.1947195/)
