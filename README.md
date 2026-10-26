@@ -8,7 +8,7 @@ Apartment Plan은 구역과 입구를 지정하고, 선택한 아파트 에셋�
 
 ### 시작하기
 
-1. Apartment Plan과 필수 에셋 팩 [AP Invisible Road Pack](https://mods.paradoxplaza.com/mods/165049/Any)을 같은 플레이셋에서 활성화합니다.
+1. Apartment Plan과 필수 에셋 팩 [AP Invisible Road Pack](https://mods.paradoxplaza.com/mods/165049/Windows)을 같은 플레이셋에서 활성화합니다.
 2. 화면 우상단 Apartment Plan 메뉴에서 구역과 입구를 지정합니다.
 3. 사용할 건물 에셋과 배치 조건을 선택하고 계획도를 확인합니다.
 4. 실제 배치 미리보기에서 게임의 건설 검사 결과를 확인한 뒤 적용합니다.
@@ -51,7 +51,7 @@ Apartment Plan lets you define an area and its entrances, choose apartment asset
 
 ### Getting started
 
-1. Enable Apartment Plan and the required [AP Invisible Road Pack](https://mods.paradoxplaza.com/mods/165049/Any) in the same playset.
+1. Enable Apartment Plan and the required [AP Invisible Road Pack](https://mods.paradoxplaza.com/mods/165049/Windows) in the same playset.
 2. Open Apartment Plan from the top-right menu and define the boundary and entrances.
 3. Choose building assets and layout settings, then review the plan.
 4. Open the construction preview, check the game's validation results, and apply it.
@@ -84,4 +84,4 @@ A limited diagnostic summary is sent to the developer's site database only after
 
 [Source and issue reports](https://github.com/zacumyou/ApartmentPlan)
 
-[Paradox Mods](https://mods.paradoxplaza.com/mods/165052/Any) · [Discussion / 피드백](https://forum.paradoxplaza.com/forum/threads/mod-alpha-apartment-plan-apartment-complexes-discussion-feedback.1947195/)
+[Paradox Mods](https://mods.paradoxplaza.com/mods/165052/Windows) · [Discussion / 피드백](https://forum.paradoxplaza.com/forum/threads/mod-alpha-apartment-plan-apartment-complexes-discussion-feedback.1947195/)
