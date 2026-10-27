@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using Newtonsoft.Json;
@@ -30,7 +30,7 @@ public partial class PlanSystem {
     layout=Draft?.Diagnostics,layoutReasons,failedLayoutStatus,failedLayoutInput,accessFailures=Draft?.RequiredAccessFailures,parkingFailures=Draft?.ParkingAccessFailures,
     frontageFailures=Status=="AP.FrontageRecalculate"?frontageDetails:null,
     pedestrianAuditFile=World.GetExistingSystemManaged<ConstructionTool>()?.PedestrianAuditFile,
-    nativeReport=native?.Report,nativeNotice=native?.Notice,nativeMetrics=native?.Metrics
+    nativeReport=native?.Report,nativeNotice=native?.Notice,nativeMetrics=Status=="AP.NativeBlocked"&&NativeFailureSnapshot!=null?NativeFailureSnapshot:native?.Metrics
    };
    UnityEngine.GUIUtility.systemCopyBuffer=Trace.Redact("Apartment Plan diagnostic report\n"+JsonConvert.SerializeObject(report,Formatting.Indented)+"\n\nRecent Apartment Plan events (bounded; not the full game log)\n"+Trace.Recent());
    diagnosticCopyState=1;

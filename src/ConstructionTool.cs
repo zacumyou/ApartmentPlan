@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using Colossal.Mathematics;
@@ -33,11 +33,22 @@ public partial class ConstructionTool:ToolBaseSystem {
  internal readonly Dictionary<string,int> Metrics=new Dictionary<string,int>();internal string Notice="";
  PlanSystem Plans=>World.GetExistingSystemManaged<PlanSystem>();
  protected override void OnCreate(){base.OnCreate();temps=GetEntityQuery(ComponentType.ReadOnly<Temp>(),ComponentType.Exclude<Deleted>());}
- protected override void OnStartRunning(){base.OnStartRunning();RunGeneration++;forceDemolitionStage=0;preexistingRoadCurves.Clear();ResetProgress();demolitionPrompted=false;villaStage=0;roadWaitFrames=roadStableFrames=0;roadSignature=-1;stagedRoads.Clear();frame=0;attachmentPass=0;surfacePass=0;submitted=false;applyRequested=false;committed=false;Valid=false;Report="";Notice="";Metrics.Clear();expectedPavement.Clear();appliedPavement.Clear();pavementPrefab=Entity.Null;expectedTrees.Clear();appliedTrees.Clear();expected.Clear();expectedBays.Clear();bayDefinitions.Clear();appliedBuildings.Clear();appliedBays.Clear();OwnedEntities.Clear();previewRefreshAt=0;StartDemolitionRequest();}
- protected override void OnStopRunning(){RunGeneration++;forceDemolitionStage=0;previewRefreshAt=0;ClearDefinitions();applyMode=ApplyMode.Clear;Valid=false;base.OnStopRunning();}
+ protected override void OnStartRunning(){base.OnStartRunning();RunGeneration++;if(Plans!=null)Plans.NativeFailureSnapshot=null;failureStage=0;forceDemolitionStage=0;preexistingRoadCurves.Clear();ResetProgress();demolitionPrompted=false;villaStage=0;roadWaitFrames=roadStableFrames=0;roadSignature=-1;stagedRoads.Clear();frame=0;attachmentPass=0;surfacePass=0;submitted=false;applyRequested=false;committed=false;Valid=false;Report="";Notice="";Metrics.Clear();expectedPavement.Clear();appliedPavement.Clear();pavementPrefab=Entity.Null;expectedTrees.Clear();appliedTrees.Clear();expected.Clear();expectedBays.Clear();bayDefinitions.Clear();appliedBuildings.Clear();appliedBays.Clear();OwnedEntities.Clear();previewRefreshAt=0;StartDemolitionRequest();}
+ protected override void OnStopRunning(){RunGeneration++;if(Plans!=null)Plans.NativeFailureSnapshot=null;failureStage=0;forceDemolitionStage=0;previewRefreshAt=0;ClearDefinitions();applyMode=ApplyMode.Clear;Valid=false;base.OnStopRunning();}
  internal void Apply(){if(Valid&&!committed){ResetProgress();applyRequested=true;}}
  void ClearDefinitions(){deferDefinitions=false;previewWork?.Dispose();previewWork=null;validation=null;foreach(var e in definitions)if(EntityManager.Exists(e))EntityManager.DestroyEntity(e);definitions.Clear();submittedConnections.Clear();submittedCourses.Clear();}
- void Status(string key,string detail=""){var s=Plans;if(s==null)return;if(key=="AP.NativeBlocked"&&s.Status!=key)s.Sound(PlanSound.Fail);s.Status=key;Report=detail;s.Revision++;Trace.Event("construction."+key,detail);}
+ int failureStage;
+ void CaptureFailure(){
+  Metrics["DiagnosticVersion"]=1;Metrics["FailureStage"]=failureStage;
+  Metrics["ExpectedBuildings"]=expected.Count;Metrics["ExpectedTrees"]=expectedTrees.Count;
+  Metrics["ExpectedPavement"]=expectedPavement.Count;Metrics["ExpectedBays"]=expectedBays.Count;
+  Metrics["Buildings"]=validation?.Buildings.Count??(Metrics.TryGetValue("Buildings",out var matched)?matched:appliedBuildings.Count);Metrics["Trees"]=appliedTrees.Count;
+  Metrics["Pavement"]=appliedPavement.Count;Metrics["Bays"]=appliedBays.Count;
+  Metrics["AttachmentPass"]=attachmentPass;Metrics["SurfacePass"]=surfacePass;
+  if(Plans!=null)Plans.NativeFailureSnapshot=new Dictionary<string,int>(Metrics);
+  Trace.Event("construction.failure.metrics",string.Join(" ",Metrics.Select(p=>p.Key+"="+p.Value)));
+ }
+ void Status(string key,string detail=""){var s=Plans;if(s==null)return;if(key=="AP.NativeBlocked")CaptureFailure();if(key=="AP.NativeBlocked"&&s.Status!=key)s.Sound(PlanSound.Fail);s.Status=key;Report=detail;s.Revision++;Trace.Event("construction."+key,detail);}
  FrameWork previewWork;ValidationResult validation;
  bool AdvanceWork(){
   if(!previewWork.Step())return false;
@@ -74,16 +85,16 @@ public partial class ConstructionTool:ToolBaseSystem {
    Status(Valid?(Demolishing?"AP.DemolitionReady":"AP.NativeReady"):"AP.NativeBlocked",detail);
    if(Demolishing&&Valid&&!demolitionPrompted){demolitionPrompted=true;s.Request("nativeConfirmDemolition");}
    if(applyRequested){applyRequested=false;if(!Valid)return deps;if(!Demolishing&&(s.Draft?.Villa==true||s.Draft?.Tower==true)&&villaStage==0&&Plans?.Draft?.VillaExistingRoadsOnly!=true){CaptureOwnership();stagedRoads.AddRange(OwnedEntities);CheckpointRoads();ClearDefinitions();applyMode=ApplyMode.Apply;villaStage=1;frame=0;Valid=false;Status("AP.RoadStageWaiting");return deps;}if(!Demolishing){appliedBuildings.AddRange(buildings);CaptureOwnership();}ClearDefinitions();applyMode=ApplyMode.Apply;committed=true;frame=0;Valid=false;if(Demolishing){s.NativeAuditAvailable=false;s.Request("nativeScheduleDemolition",demolitionPlan.ToString());Status("AP.DemolitionApplied");s.Sound(PlanSound.Demolish);}else{s.NativeCommitted=true;s.NativeAuditAvailable=true;s.Request("nativeRecordCommit");Status("AP.NativeApplied");s.Sound(PlanSound.Build);}}
-  }catch(Exception error){forceDemolitionStage=0;if(villaStage==1||villaStage==2)villaStage=4;Valid=false;applyRequested=false;previewRefreshAt=0;ClearDefinitions();applyMode=ApplyMode.Clear;submitted=true;frame=9;Notice=stagedRoads.Count>0?"AP.RoadStagePartial":"AP.Native.Details";Trace.Failure("construction.failed",error);Status("AP.NativeBlocked",error.Message);}
+  }catch(Exception error){Metrics["FailureFlags"]=1024;Metrics["Buildings"]=validation?.Buildings.Count??0;forceDemolitionStage=0;if(villaStage==1||villaStage==2)villaStage=4;Valid=false;applyRequested=false;previewRefreshAt=0;ClearDefinitions();applyMode=ApplyMode.Clear;submitted=true;frame=9;Notice=stagedRoads.Count>0?"AP.RoadStagePartial":"AP.Native.Details";Trace.Failure("construction.failed",error);Status("AP.NativeBlocked",error.Message);}
   return deps;
  }
  IEnumerable<int> PreparePreview(PlanSystem s,ValidationResult result){
-  foreach(var step in SubmitSteps(s))yield return step;
+  failureStage=1;foreach(var step in SubmitSteps(s))yield return step;
   SetProgress(65);
   for(int i=0;i<8;i++)yield return 1;
   while(true){
-   if(TrimLotSurfaces()){if(++surfacePass>6)throw new InvalidOperationException("Lot surfaces kept regenerating; turn off lot tiles and recreate preview");for(int i=0;i<8;i++)yield return 1;continue;}
-   foreach(var step in AttachParkingSteps(s))yield return step;
+   failureStage=2;if(TrimLotSurfaces()){if(++surfacePass>6)throw new InvalidOperationException("Lot surfaces kept regenerating; turn off lot tiles and recreate preview");for(int i=0;i<8;i++)yield return 1;continue;}
+   failureStage=3;foreach(var step in AttachParkingSteps(s))yield return step;
    if(!parkingChanged)break;
    if(++attachmentPass>4)throw new InvalidOperationException("Parking attachment preview did not stabilize");
    for(int i=0;i<8;i++)yield return 1;
@@ -201,7 +212,7 @@ public partial class ConstructionTool:ToolBaseSystem {
   if(EntityManager.HasBuffer<Game.Notifications.IconElement>(e))foreach(var item in EntityManager.GetBuffer<Game.Notifications.IconElement>(e,true)){
    if(!EntityManager.HasComponent<PrefabRef>(item.m_Icon))continue;
    var p=EntityManager.GetComponentData<PrefabRef>(item.m_Icon).m_Prefab;
-   if(EntityManager.HasComponent<ToolErrorData>(p))names.Add(EntityManager.GetComponentData<ToolErrorData>(p).m_Error.ToString());
+   if(EntityManager.HasComponent<ToolErrorData>(p)){var code=EntityManager.GetComponentData<ToolErrorData>(p).m_Error;names.Add(code.ToString());if(!Metrics.ContainsKey("NativeErrorCode"))Metrics["NativeErrorCode"]=(int)code;}
   }
   string prefab="";var ps=World.GetOrCreateSystemManaged<PrefabSystem>();if(EntityManager.HasComponent<PrefabRef>(e)&&ps.TryGetPrefab<PrefabBase>(EntityManager.GetComponentData<PrefabRef>(e).m_Prefab,out var value))prefab=value?.name??"";
   string geometry="";

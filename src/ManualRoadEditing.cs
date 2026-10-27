@@ -10,7 +10,7 @@ public partial class PlanSystem {
  internal string RoadHint=>RoadPoints.Count==0?"AP.RoadStart":RoadCurved&&RoadPoints.Count==1?"AP.RoadControl":"AP.RoadEnd";
  void ClearRoadEdit(){Roads.Clear();RoadDraft.Clear();}
  void ClickRoad(Point point){
-  if(NativeCommitted||Draft==null)return;
+  if(NativeCommitted||!Layout.Valid(Boundary))return;
   if(!Layout.Inside(point,Boundary)||RoadPoints.Count>0&&(point-RoadPoints.Last()).Length<4){Status="AP.ManualRoadFit";Revision++;return;}
   if(Roads.Count+RoadDraft.Roads.Count>=PlanLimits.Roads){SetLimit("AP.LimitRoads",Roads.Count+RoadDraft.Roads.Count+1,PlanLimits.Roads);Revision++;return;}
   try{RoadDraft.Add(point);}catch(ArgumentException){Status="AP.ManualRoadFit";Revision++;return;}
@@ -28,7 +28,7 @@ public partial class PlanSystem {
   Roads.AddRange(batch);RoadDraft.Clear();Mode="preview";
   Action reject=()=>{foreach(var road in batch)Roads.Remove(road);RoadDraft.Clear();RoadDraft.Roads.AddRange(batch);RoadDraft.Samples.AddRange(batch.Select(r=>r.Sample()));RoadPoints.AddRange(points);Mode="road";};
   Rebuild(reject);
-  if(!LayoutPending){reject();LayoutOutdated=false;}
+  if(!LayoutPending&&Mod.Options.AutoCalculate){reject();LayoutOutdated=false;}
   Trace.Event("road.batch","segments="+batch.Length+" queued="+LayoutPending);
  }
 }

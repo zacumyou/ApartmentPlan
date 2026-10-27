@@ -1,0 +1,22 @@
+const fs=require('fs'),path=require('path'),vm=require('vm'),assert=require('assert');
+const ts=require('../ui/node_modules/typescript');
+const source=fs.readFileSync(path.join(__dirname,'../ui/src/network-list.ts'),'utf8');
+const code=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText;
+const context={exports:{},Intl:undefined};vm.runInNewContext(code,context);
+const {orderNetworks:order,roadWidthLabel:label}=context.exports;
+const items=[{Id:'라',Width:32,Builtin:true},{Id:'나',Width:8,Builtin:true},{Id:'가',Width:8,RoadBuilder:true},{Id:'다',Width:12},{Id:'마',Width:NaN}];
+const ids=x=>Array.from(x,n=>n.Id).join(',');
+assert.equal(ids(order(items,'all','라',['다','나'],8,x=>x)),'라,다,나,가,마');
+assert.equal(ids(order(items,'all',undefined,[],10,x=>x)),'가,나,다,라,마');
+assert.equal(ids(order(items,'builtin','다',[],8,x=>x)),'나,라');
+assert.equal(ids(order(items,'roadBuilder',undefined,[],8,x=>x)),'가');
+assert.equal(ids(order([{Id:'rb',Width:8,Builtin:true,RoadBuilder:true}],'builtin',undefined,[],8,x=>x)),'');
+assert.equal(ids(order(items,'all',undefined,null,NaN,x=>x)),'가,나,다,라,마');
+assert.equal(label(7.12345,'?'),'7.12 m');assert.equal(label(8,'?'),'8 m');assert.equal(label(NaN,'?'),'?');
+assert.equal(ids(items),'라,나,가,다,마');
+console.log('PASS source filters / selected and recent priority / width distance / Korean tie order / unknown widths / labels / input preservation');
+
+assert.equal(context.exports.compareNetworkNames('도로 2','도로 10'),-1);
+assert.equal(context.exports.compareNetworkNames('가로','나로'),-1);
+assert.equal(context.exports.compareNetworkNames('ROAD 02','road 2'),0);
+console.log('PASS game runtime without Intl / natural numeric order');

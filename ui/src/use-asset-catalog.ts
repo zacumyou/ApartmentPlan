@@ -1,4 +1,5 @@
 import React from 'react';
+import {uiNow} from './runtime';
 import {assetName} from './asset-name';
 import {trace} from './trace';
 type Named={Id:string;Name?:string;NameKey?:string};
@@ -11,9 +12,9 @@ export function useAssetCatalog<T extends Named>(raw:string,translate:Translate)
   if(!input.length){setValue({assets:[],loading:false});return;}
   setValue({assets:[],loading:true});const result:T[]=[];let index=0,maxMs=0,cpuMs=0,slices=0;
   const batch=()=>{
-   if(canceled)return;const start=performance.now();let count=0;
-   while(index<input.length){const item=input[index++];result.push({...item,Name:assetName(item,translate)});if(++count>=128||performance.now()-start>=2)break;}
-   const elapsed=performance.now()-start;maxMs=Math.max(maxMs,elapsed);cpuMs+=elapsed;slices++;
+   if(canceled)return;const start=uiNow();let count=0;
+   while(index<input.length){const item=input[index++];result.push({...item,Name:assetName(item,translate)});if(++count>=128||uiNow()-start>=2)break;}
+   const elapsed=uiNow()-start;maxMs=Math.max(maxMs,elapsed);cpuMs+=elapsed;slices++;
    if(index<input.length)timer=setTimeout(batch,8);
    else{setValue({assets:result,loading:false});trace('catalog.localized',`count=${result.length} slices=${slices} cpuMs=${cpuMs.toFixed(1)} maxSliceMs=${maxMs.toFixed(1)}`);}
   };

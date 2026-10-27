@@ -80,7 +80,6 @@ add('AP.GrassSurfaces','Grass surfaces in leftover spaces','빈자리 잔디 표
 add('AP.GrassSurfacesHint','Add native grass surfaces to small leftover spaces. Separate from Grass Sprites.','작은 빈자리 공간에 잔디 표면을 추가합니다. Grass Sprites와 별개입니다.');
 add('AP.SearchRoads','Search roads (including Road Builder)','도로 검색 (Road Builder 포함)');
 // Stable prefab IDs are shared with old saves; only visible names are localized.
-add('AP.RoadPackMissing','AP Invisible Road Pack is missing or not ready. Install/enable the asset pack and restart the game.','AP 투명도로 팩이 없거나 준비되지 않았습니다. 에셋 팩을 설치·활성화한 뒤 게임을 다시 실행하세요.');
 add('AP.TreePlacement0','All','전체');
 add('AP.TreePlacement1','Border only','테두리만');
 add('AP.TreePlacement2','Interior only','내부만');
@@ -439,7 +438,7 @@ add('AP.MigrationStale','Roads changed. Inspect again.','검사 이후 도로가
 add('AP.MigrationCount','Candidates','복구 대상');
 add('AP.MigrationSkipped','Excluded','제외');
 add('AP.MigrationDone','Updated','처리');
-add('AP.RoadPackMissing','AP road assets were not loaded by the game. Check the asset loading log.','게임에서 AP 도로 에셋을 불러오지 못했습니다. 에셋 로딩 로그를 확인하세요.');
+add('AP.RoadPackMissing','The required AP Invisible Road Pack could not be loaded. Have you subscribed to it and enabled it in the current playset? Check that its download has completed, then restart the game. If the problem persists, check the asset loading log.','필수 의존성인 AP Invisible Road Pack을 불러오지 못했습니다. 도로팩을 구독하고 현재 플레이셋에서 활성화했는지 확인해 주세요. 다운로드가 완료된 뒤 게임을 다시 실행하세요. 문제가 계속되면 에셋 로딩 로그를 확인해 주세요.');
 add('AP.RoadAssetsInvalid','Some AP road assets are missing or failed initialization. Details were logged.','일부 AP 도로 에셋이 누락되었거나 초기화 검사를 통과하지 못했습니다. 상세 내용을 로그에 기록했습니다.');
 add('AP.ParkingInOpenSpace','Use open space for missing parking','유휴부지에 부족한 주차장 추가');
 add('AP.ParkingInOpenSpaceHint','Use unreserved green space for connected parking when spaces or parking area are insufficient. Preserves manual zones and boundary greenery. Recalculate to preview.','주차 면수 또는 면적이 부족하면 연결 가능한 공원 등 유휴부지에 주차장을 추가합니다. 직접 지정한 구역과 경계 녹지는 보존합니다. 계산 후 계획도에서 확인하세요.');
@@ -451,6 +450,26 @@ add('AP.ReplacementProtectedRoad','An existing road cannot be safely removed. Re
 add('AP.EditCompoundHint','Edit this compound’s plan. Applying it removes the old facilities after confirmation.','단지 계획을 수정합니다. 수정 배치 시 확인 후 기존 단지 시설을 삭제합니다.');
 add('AP.ClosePlanTitle','Discard unsaved changes?','저장하지 않은 변경사항을 버릴까요?');
 add('AP.ClosePlanMessage','Closing will discard this unsaved plan or changes. Previously saved plans and built facilities will remain. Close without saving?','닫으면 저장하지 않은 계획이나 변경사항이 사라집니다. 이미 저장한 계획과 설치된 시설은 유지됩니다. 저장하지 않고 닫을까요?');
+add('AP.AutoCalculate','Automatic calculation','자동 계산');
+add('AP.AutoCalculateHint','Calculate after changes. Turning this back on calculates the current plan.','변경 후 자동으로 계산합니다. 다시 켜면 현재 계획을 계산합니다.');
+add('AP.CalculationNeeded','Calculation needed','계산 필요');
+add('AP.SearchRoads','Search roads','도로 검색');
+add('AP.Network.RoadBuilderOnly','Road Builder only','Road Builder만');
+add('AP.Network.BuiltinOnly','Built-in roads only','기본 내장 도로만');
+add('AP.Network.Empty','No compatible roads match this filter.','조건에 맞는 호환 도로가 없습니다.');
+add("AP.Previous","Previous","이전");
+add("AP.Next","Next","다음");
+add("AP.Villa.CentralRoad","Central road","중앙 도로");
+add("AP.Villa.ExistingRoads","Use existing roads","기존 도로 사용");
+add("AP.LayoutWaiting","Waiting to calculate…","계산 대기 중…");
+add("AP.Villa.PedestrianWarning","Some buildings may lack pedestrian access. Check the construction preview.","일부 건물의 보행 연결이 부족할 수 있습니다. 실제 배치 미리보기를 확인하세요.");
+add("AP.DeleteBuilt","Use Demolish entire compound to remove a built compound.","설치된 단지는 단지 전체 삭제를 이용하세요.");
+add("AP.DeleteNotReady","Please wait until loading completes.","불러오기가 완료될 때까지 기다려 주세요.");
+add("AP.DeleteCalculating","Wait until calculation completes before deleting.","계산이 완료된 뒤 삭제할 수 있습니다.");
+add("AP.DeleteDemolition","Demolition is in progress.","단지를 삭제하고 있습니다.");
+add("AP.DeletePreview","Exit the construction preview before deleting the plan.","실제 배치 미리보기를 종료한 뒤 계획도를 삭제하세요.");
+add("AP.DeleteDialogOpen","Close the current confirmation dialog first.","현재 확인 창을 먼저 닫아 주세요.");
+add("AP.DeleteNoTarget","No plan is selected for deletion.","삭제할 계획도가 선택되지 않았습니다.");
 for(const data of [en,ko])for(const key of Object.keys(data))data[key]=data[key].replace(/²/g,"2").replace(/[·•]/g,",").replace(/×/g,"x").replace(/−/g,"-").replace(/±/g,"+/-").replace(/–/g,"-");
 for(const [name,data]of [['en-US',en],['ko-KR',ko]])fs.writeFileSync(path.join(root,'lang',name+'.json'),JSON.stringify(data,null,2));
 

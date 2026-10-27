@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -26,7 +26,7 @@ public partial class PlanSystem {
  }
  internal void InspectPlan(int id){if(!Saved.Any(p=>p.Info.Number==id))return;NativeAuditAvailable=false;SelectedPlan=id;Open=false;Focused=false;Exit();SelectCompoundInfo();Revision++;}
  void EditStored(){
-  RestoreCompoundDraft();CancelLayout();LayoutOutdated=false;
+  RestoreCompoundDraft();CancelLayout();LayoutOutdated=false;Mod.Options.ParkingInOpenSpace=false;
   var stored=SelectedStored;if(stored==null)return;Catalog();var original=ReadEdit(stored.Entity);var d=original?.Pending??original;
   var boundary=d?.Boundary??StoredBoundary(stored);if(!Layout.Valid(boundary)){Status="AP.LegacyUneditable";return;}
   Boundary.Clear();Boundary.AddRange(boundary);Entrances.Clear();VillaConnections.Clear();Zones.Clear();Ramps.Clear();ClearRoadEdit();ZonePoints.Clear();Preview.Clear();ReplacementIndex=-1;
@@ -37,10 +37,11 @@ public partial class PlanSystem {
    Selected.Clear();foreach(var id in d.Selected??new string[0])if(Assets.Any(a=>a.Id==id))Selected.Add(id);
    Mod.Options.ParkingInOpenSpace=false;Mod.Options.PlanMode=0;Mod.Options.GrassSurfaces=false;Mod.Options.VillaTreeDensity=30;Mod.Options.TreePlacementMode=0;Mod.Options.BuildingPattern=0;Mod.Options.AllowMainTJunctions=true;
    foreach(var pair in d.Settings??new Dictionary<string,object>()){var property=typeof(Settings).GetProperty(pair.Key);if(property?.CanWrite==true&&(property.PropertyType.IsPrimitive||pair.Key=="MainNetwork"||pair.Key=="AisleNetwork"||pair.Key=="WalkNetwork"||pair.Key=="TreeSpeciesJson"))try{property.SetValue(Mod.Options,Convert.ChangeType(pair.Value,property.PropertyType,System.Globalization.CultureInfo.InvariantCulture));}catch{}}
+   bool parkingReset=Mod.Options.ParkingInOpenSpace;Mod.Options.ParkingInOpenSpace=false;
    string savedAisle=Mod.Options.AisleNetwork;
    ApplyNetworkPreferences();Draft=d.Draft;RenderDraft();Mode=IsBuilt(stored)?"edit":"preview";
-   LayoutOutdated=!NativeCommitted&&savedAisle!=Mod.Options.AisleNetwork;
-   Status=LayoutOutdated?"AP.NetworkRecalculate":"AP.EditingSaved";
+   LayoutOutdated=!NativeCommitted&&(parkingReset||savedAisle!=Mod.Options.AisleNetwork);
+   Status=LayoutOutdated?(parkingReset?"AP.CalculationNeeded":"AP.NetworkRecalculate"):"AP.EditingSaved";
   }else{Draft=null;Mode="entrance";Status="AP.LegacyEdit";}
   Entrance=Entrances.Count>0?(Point?)Entrances[0]:null;EntranceLength=Mod.Options.EntranceLength;Open=true;Activate();Revision++;
  }

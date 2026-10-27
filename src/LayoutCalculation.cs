@@ -14,10 +14,23 @@ public partial class PlanSystem {
  internal bool LayoutPending,LayoutOutdated;Action layoutRejected;Plan layoutPrevious;
  void CancelLayout(){layoutDebounce.Cancel();layoutWorker.Cancel();LayoutPending=false;layoutRejected=null;}
  void Rebuild(Action rejected=null){
+  if(!Mod.Options.AutoCalculate){
+   // Deferred edits stay in the input model. A later failure must not roll back
+   // just one edit while silently accepting the others against an older plan.
+   CancelLayout();LayoutOutdated=true;Status="AP.CalculationNeeded";Revision++;return;
+  }
   // Transactional edits retain their immediate rollback callback. Ordinary
   // changes are sampled only after the user stops editing for one second.
   if(rejected!=null||(!Entrance.HasValue&&!Villa)||!Layout.Valid(Boundary)){CalculateLayout(rejected);return;}
   CancelLayout();LayoutOutdated=true;layoutDebounce.Schedule(UnityEngine.Time.realtimeSinceStartupAsDouble);Status="AP.LayoutWaiting";Revision++;
+ }
+ void ToggleAutoCalculate(){
+  if(NativeCommitted||World.GetExistingSystemManaged<Game.Tools.ToolSystem>()?.activeTool is ConstructionTool)return;
+  Mod.Options.AutoCalculate=!Mod.Options.AutoCalculate;Mod.Options.ApplyAndSave();
+  if(!Mod.Options.AutoCalculate){
+   if(LayoutPending||layoutDebounce.Pending){CancelLayout();LayoutOutdated=true;Status="AP.CalculationNeeded";}
+  }else if(!NativeCommitted&&Layout.Valid(Boundary)&&(Entrance.HasValue||Villa))CalculateLayout();
+  Revision++;
  }
  void CalculateLayout(Action rejected=null){
   EnsurePlanningCatalog();

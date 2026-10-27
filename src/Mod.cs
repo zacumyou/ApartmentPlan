@@ -1,4 +1,4 @@
-using Colossal.IO.AssetDatabase;
+﻿using Colossal.IO.AssetDatabase;
 using Colossal.Logging;
 using Game;
 using Game.Modding;
@@ -8,7 +8,7 @@ namespace ApartmentPlan {
 public sealed class Mod:IMod {
  internal static Settings Options; internal static readonly ILog Log=LogManager.GetLogger("ApartmentPlan").SetShowsErrorsInUI(true);
  Locale en,ko;
- public void OnLoad(UpdateSystem updates){Trace.Start();UnityEngine.Application.logMessageReceivedThreaded+=Trace.UnityLog;try{Trace.Event("mod.load.begin");Options=new Settings(this);AssetDatabase.global.LoadSettings("ApartmentPlan",Options,new Settings(this));if(Options.VillaSpacingVersion<1){if(Options.VillaGap==1)Options.VillaGap=0;Options.VillaSpacingVersion=1;}if(Options.LandscapeDefaultsVersion<1){Options.GrassSurfaces=false;Options.LandscapeDefaultsVersion=1;Options.ApplyAndSave();}Options.RegisterKeyBindings();Options.RegisterInOptionsUI();Trace.Event("settings.registered");
+ public void OnLoad(UpdateSystem updates){Trace.Start();UnityEngine.Application.logMessageReceivedThreaded+=Trace.UnityLog;try{Trace.Event("mod.load.begin");Options=new Settings(this);AssetDatabase.global.LoadSettings("ApartmentPlan",Options,new Settings(this));Options.ParkingInOpenSpace=false;if(Options.VillaSpacingVersion<1){if(Options.VillaGap==1)Options.VillaGap=0;Options.VillaSpacingVersion=1;}if(Options.LandscapeDefaultsVersion<1){Options.GrassSurfaces=false;Options.LandscapeDefaultsVersion=1;Options.ApplyAndSave();}Options.RegisterKeyBindings();Options.RegisterInOptionsUI();Trace.Event("settings.registered");
   en=new Locale(Options,"en-US");ko=new Locale(Options,"ko-KR");GameManager.instance.localizationManager.AddSource("en-US",en);GameManager.instance.localizationManager.AddSource("ko-KR",ko);
   updates.UpdateBefore<InvisibleRoadPrefabs,Game.Prefabs.PrefabInitializeSystem>(SystemUpdatePhase.PrefabUpdate);
   updates.UpdateAfter<InvisibleRoadPrefabAudit,Game.Prefabs.NetInitializeSystem>(SystemUpdatePhase.PrefabUpdate);

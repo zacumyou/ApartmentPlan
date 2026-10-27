@@ -10,6 +10,6 @@ export function assetName(asset:NamedAsset,translate:Translate):string {
 }
 
 export function assetMatches(asset:NamedAsset,query:string):boolean {
- const needle=query.trim().toLocaleLowerCase();
- return (asset.Name||asset.Id).toLocaleLowerCase().includes(needle)||asset.Id.toLocaleLowerCase().includes(needle);
+ const needle=query.trim().toLowerCase();
+ return (asset.Name||asset.Id).toLowerCase().includes(needle)||asset.Id.toLowerCase().includes(needle);
 }
