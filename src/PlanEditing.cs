@@ -14,7 +14,7 @@ public partial class PlanSystem {
  internal StoredPlan SelectedStored=>Saved.Find(p=>p.Info.Number==SelectedPlan);
  byte[] CaptureEdit(){
   var settings=new Dictionary<string,object>();foreach(var p in typeof(Settings).GetProperties(BindingFlags.Public|BindingFlags.Instance|BindingFlags.DeclaredOnly))
-   if(p.CanRead&&p.CanWrite&&(p.PropertyType.IsPrimitive||p.Name=="MainNetwork"||p.Name=="AisleNetwork"||p.Name=="WalkNetwork"||p.Name=="TreeSpeciesJson"||p.Name.StartsWith("Tower",StringComparison.Ordinal)))settings[p.Name]=p.GetValue(Mod.Options);
+   if(p.Name!="DebugLogging"&&p.CanRead&&p.CanWrite&&(p.PropertyType.IsPrimitive||p.Name=="MainNetwork"||p.Name=="AisleNetwork"||p.Name=="WalkNetwork"||p.Name=="TreeSpeciesJson"||p.Name.StartsWith("Tower",StringComparison.Ordinal)))settings[p.Name]=p.GetValue(Mod.Options);
   var data=new PlanEditData{VillaConnections=VillaConnections,Boundary=Boundary,Entrances=Entrances,Zones=Zones,Ramps=Ramps,Roads=Roads,Draft=Draft,Selected=Selected.ToArray(),Elevation=Elevation,NativeCommitted=NativeCommitted,Settings=settings};
   var bytes=PlanEditCodec.Encode(data);if(bytes.Length>MaxEditBytes)throw new InvalidOperationException("Plan edit data exceeds budget");return bytes;
  }
@@ -36,7 +36,7 @@ public partial class PlanSystem {
    VillaConnections.AddRange(d.VillaConnections??new List<VillaConnection>());Entrances.AddRange(d.Entrances);Zones.AddRange(d.Zones??new List<ManualZone>());Ramps.AddRange(d.Ramps??new List<Parcel>());Roads.AddRange(d.Roads??new List<ManualRoad>());
    Selected.Clear();foreach(var id in d.Selected??new string[0])if(Assets.Any(a=>a.Id==id))Selected.Add(id);
    Mod.Options.ParkingInOpenSpace=false;Mod.Options.PlanMode=0;Mod.Options.GrassSurfaces=false;Mod.Options.VillaTreeDensity=30;Mod.Options.TreePlacementMode=0;Mod.Options.BuildingPattern=0;Mod.Options.AllowMainTJunctions=true;
-   foreach(var pair in d.Settings??new Dictionary<string,object>()){var property=typeof(Settings).GetProperty(pair.Key);if(property?.CanWrite==true&&(property.PropertyType.IsPrimitive||pair.Key=="MainNetwork"||pair.Key=="AisleNetwork"||pair.Key=="WalkNetwork"||pair.Key=="TreeSpeciesJson"))try{property.SetValue(Mod.Options,Convert.ChangeType(pair.Value,property.PropertyType,System.Globalization.CultureInfo.InvariantCulture));}catch{}}
+   foreach(var pair in d.Settings??new Dictionary<string,object>()){var property=typeof(Settings).GetProperty(pair.Key);if(pair.Key!="DebugLogging"&&property?.CanWrite==true&&(property.PropertyType.IsPrimitive||pair.Key=="MainNetwork"||pair.Key=="AisleNetwork"||pair.Key=="WalkNetwork"||pair.Key=="TreeSpeciesJson"))try{property.SetValue(Mod.Options,Convert.ChangeType(pair.Value,property.PropertyType,System.Globalization.CultureInfo.InvariantCulture));}catch{}}
    bool parkingReset=Mod.Options.ParkingInOpenSpace;Mod.Options.ParkingInOpenSpace=false;
    string savedAisle=Mod.Options.AisleNetwork;
    ApplyNetworkPreferences();Draft=d.Draft;RenderDraft();Mode=IsBuilt(stored)?"edit":"preview";

@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <Configurations>Debug;Release</Configurations>
-    <Version>0.1.77</Version>
+    <Version>0.1.78</Version>
     <AssemblyName>ApartmentPlan</AssemblyName>
     <RootNamespace>ApartmentPlan</RootNamespace>
     <AssemblyTitle>APARTMENT PLAN</AssemblyTitle>

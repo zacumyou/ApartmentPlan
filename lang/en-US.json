@@ -552,5 +552,7 @@
   "AP.DeleteDemolition": "Demolition is in progress.",
   "AP.DeletePreview": "Exit the construction preview before deleting the plan.",
   "AP.DeleteDialogOpen": "Close the current confirmation dialog first.",
-  "AP.DeleteNoTarget": "No plan is selected for deletion."
+  "AP.DeleteNoTarget": "No plan is selected for deletion.",
+  "AP.Option.DebugLogging": "Detailed debug logging",
+  "AP.Desc.DebugLogging": "Record detailed local events for troubleshooting. Off on every game start. Does not enable automatic uploads."
 }

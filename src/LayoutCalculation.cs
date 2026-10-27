@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -42,8 +42,8 @@ public partial class PlanSystem {
   // Missing initialization must never silently turn into mismatched widths
   // and thousands of rejected housing candidates.
   string networkFolder=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)+"Low","Colossal Order","Cities Skylines II","Logs","ApartmentPlan");
-  var networkReport=JsonConvert.SerializeObject(new{utc=DateTime.UtcNow,main=Mod.Options.MainNetwork,mainReady=Network("main")!=null,aisle=Mod.Options.AisleNetwork,aisleReady=Network("aisle")!=null,audit=World.GetOrCreateSystemManaged<InvisibleRoadPrefabs>().Diagnostic()});
-  try{Directory.CreateDirectory(networkFolder);File.WriteAllText(Path.Combine(networkFolder,"layout-network-state.json"),networkReport);}catch(Exception e){Trace.Failure("layout.diagnostic.write",e);}
+  if(Trace.Detailed){var networkReport=JsonConvert.SerializeObject(new{utc=DateTime.UtcNow,main=Mod.Options.MainNetwork,mainReady=Network("main")!=null,aisle=Mod.Options.AisleNetwork,aisleReady=Network("aisle")!=null,audit=World.GetOrCreateSystemManaged<InvisibleRoadPrefabs>().Diagnostic()});
+  if(Trace.Detailed)try{Directory.CreateDirectory(networkFolder);File.WriteAllText(Path.Combine(networkFolder,"layout-network-state.json"),networkReport);}catch(Exception e){Trace.Failure("layout.diagnostic.write",e);}}
   if(existingVillaRoads.Count==0&&((!Villa||Mod.Options.VillaCentralRoad)&&Network("main")==null||Network("aisle")==null||!ApartmentAisle(Network("aisle")))){Status="AP.NetworkUnavailable";Trace.Event("layout.networkUnavailable","main="+Mod.Options.MainNetwork+" found="+(Network("main")!=null)+" aisle="+Mod.Options.AisleNetwork+" found="+(Network("aisle")!=null));Revision++;return;}
   if(Tower&&(!Assets.Any(a=>a.Id==Mod.Options.TowerParkingAsset))){Status="AP.Tower.SelectParking";Revision++;return;}
   if(Villa)Selected.RemoveWhere(id=>Assets.Any(a=>a.Id==id&&VillaLayout.Excluded(a)));
@@ -58,12 +58,12 @@ public partial class PlanSystem {
   Trace.Event("layout.queued","points="+input.Boundary.Count+" assets="+input.Assets.Count);
   layoutWorker.Submit(token=>{
    input.Options.Cancellation=token;
-   // Independent replay evidence, even if the session event logger is disabled.
-   try{Directory.CreateDirectory(folder);File.WriteAllText(Path.Combine(folder,"layout-last-input.json"),json);}catch{}
+   // Replay snapshots are opt-in diagnostic files.
+   if(Trace.Detailed)try{Directory.CreateDirectory(folder);File.WriteAllText(Path.Combine(folder,"layout-last-input.json"),json);}catch{}
    var watch=System.Diagnostics.Stopwatch.StartNew();
    var result=Layout.Generate(input.Boundary,input.Entrances,input.Assets,input.Options,input.Ramps,input.Zones,input.Roads);
    token.ThrowIfCancellationRequested();
-   try{File.WriteAllText(Path.Combine(folder,"layout-last-result.json"),JsonConvert.SerializeObject(new{utc=DateTime.UtcNow,ms=watch.ElapsedMilliseconds,result.LayoutTimings,buildings=result.Parcels.Count(r=>r.Kind==0),parking=result.Parcels.Sum(r=>r.ParkingSpaces),result.Diagnostics,result.ParkingAccessFailures,result.RequiredAccessFailures}));}catch{}
+   if(Trace.Detailed)try{File.WriteAllText(Path.Combine(folder,"layout-last-result.json"),JsonConvert.SerializeObject(new{utc=DateTime.UtcNow,ms=watch.ElapsedMilliseconds,result.LayoutTimings,buildings=result.Parcels.Count(r=>r.Kind==0),parking=result.Parcels.Sum(r=>r.ParkingSpaces),result.Diagnostics,result.ParkingAccessFailures,result.RequiredAccessFailures}));}catch{}
    return result;
   });
  }

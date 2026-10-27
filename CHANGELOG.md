@@ -1,3 +1,13 @@
+# 0.1.78
+
+## 한국어
+- 평상시 상세 로그 기록을 줄였습니다. 오류와 주요 작업 결과는 계속 기록됩니다.
+- 문제 확인이 필요할 때만 상세 디버그 로그를 켤 수 있습니다. 게임을 다시 시작하면 꺼집니다.
+
+## English
+- Reduced routine detailed logging while keeping errors and key operation results.
+- Detailed debug logs can be enabled for troubleshooting and turn off on game restart.
+
 # 0.1.77
 
 ## 한국어

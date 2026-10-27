@@ -470,6 +470,8 @@ add("AP.DeleteDemolition","Demolition is in progress.","단지를 삭제하고 �
 add("AP.DeletePreview","Exit the construction preview before deleting the plan.","실제 배치 미리보기를 종료한 뒤 계획도를 삭제하세요.");
 add("AP.DeleteDialogOpen","Close the current confirmation dialog first.","현재 확인 창을 먼저 닫아 주세요.");
 add("AP.DeleteNoTarget","No plan is selected for deletion.","삭제할 계획도가 선택되지 않았습니다.");
+add('AP.Option.DebugLogging','Detailed debug logging','상세 디버그 로그');
+add('AP.Desc.DebugLogging','Record detailed local events for troubleshooting. Off on every game start. Does not enable automatic uploads.','문제 분석용 상세 이벤트를 로컬에 기록합니다. 게임 시작마다 꺼집니다. 자동 전송은 활성화되지 않습니다.');
 for(const data of [en,ko])for(const key of Object.keys(data))data[key]=data[key].replace(/²/g,"2").replace(/[·•]/g,",").replace(/×/g,"x").replace(/−/g,"-").replace(/±/g,"+/-").replace(/–/g,"-");
 for(const [name,data]of [['en-US',en],['ko-KR',ko]])fs.writeFileSync(path.join(root,'lang',name+'.json'),JSON.stringify(data,null,2));
 
