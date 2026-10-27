@@ -9,7 +9,19 @@ class Program {
   ((Math.Abs(a.X+a.W-b.X)<.01||Math.Abs(b.X+b.W-a.X)<.01)&&Math.Min(a.Y+a.D,b.Y+b.D)-Math.Max(a.Y,b.Y)>.01)||
   ((Math.Abs(a.Y+a.D-b.Y)<.01||Math.Abs(b.Y+b.D-a.Y)<.01)&&Math.Min(a.X+a.W,b.X+b.W)-Math.Max(a.X,b.X)>.01);
  public sealed class ReplayInput {public List<Point> Boundary {get;set;} public List<Point> Entrances {get;set;} public List<Asset> Assets {get;set;} public LayoutOptions Options {get;set;} public List<Parcel> Ramps {get;set;} public List<ManualZone> Zones {get;set;} public List<ManualRoad> Roads {get;set;}}
- static void Main(string[] args){if(args.Length>0&&args[0]=="--batch-audio"){
+ static void Main(string[] args){if(args.Length>0&&args[0]=="--diagnostic-evidence"){FrontageReportTests.Run();return;}if(args.Length>0&&args[0]=="--road-widths"){
+ var input=new ReplayInput{Boundary=new List<Point>{new Point(0,0),new Point(160,0),new Point(160,275),new Point(0,325)},Entrances=new List<Point>{new Point(60,0),new Point(120,287.5)},Assets=new List<Asset>{new Asset{Id="Slab 40m",Width=40,Depth=12,Height=45,Homes=80},new Asset{Id="Slab 24m",Width=24,Depth=12,Height=30,Homes=40}},Options=new LayoutOptions{ContinuousFrontage=true,RequireBuildingRoad=true,MainRoadPedestrian=true,AisleRoadPedestrian=true,Road=16,MainCurveRadius=40,BayWidth=2.85,BayDepth=5.97292232,Play=0,Facility=0}};
+ foreach(var width in new[]{4d,8d,16d,32d}){
+  input.Options.ParkingAisle=width;input.Options.AccessRoad=width;input.Options.WideParkingAisle=0;
+  var plan=Layout.Generate(input.Boundary,input.Entrances,input.Assets,input.Options,input.Ramps,input.Zones,new List<ManualRoad>());
+  Verify(plan);
+  Check(plan.Parcels.Any(r=>r.Kind==0)&&plan.RequiredAccessFailures==0&&plan.ParkingAccessFailures==0,"building and parking access "+width);
+  Check(FrontageNetwork.Missing(plan,input.Assets,width,input.Options.ParkingPavingMargin)==0,"building frontage "+width);
+  Console.WriteLine("planned aisle widths="+string.Join(",",plan.Routes.Concat(plan.ConstructionRoutes).Where(r=>r.Use=="aisle").Select(r=>r.Width).Distinct()));
+  Console.WriteLine("width="+width+" buildings="+plan.Parcels.Count(r=>r.Kind==0)+" accessFailures="+plan.RequiredAccessFailures);
+ }
+ return;
+}if(args.Length>0&&args[0]=="--batch-audio"){
  var batch=new BatchSnapSound();var kept=new List<string>();
  foreach(var item in new[]{"Add","Snap","Remove","Snap","WrongPrefab","Temp","Snap"})if(batch.Keep(item=="Snap"))kept.Add(item);
  if(string.Join(",",kept)!="Add,Snap,Remove,WrongPrefab,Temp")throw new Exception("Non-snap audio/order changed");
@@ -52,7 +64,19 @@ if(args.Length>0&&args[0]=="--compound-road-policy"){
  Check(CompoundRoadPolicy.NewlyPlanned(newRoad.Slice(.1,.8),new[]{newRoad},new[]{oldRoad}),"planned new branch removable");
  Check(!CompoundRoadPolicy.NewlyPlanned(oldRoad,new[]{oldRoad},new[]{oldRoad}),"planned overlap does not claim old road");
  Check(!CompoundRoadPolicy.NewlyPlanned(Line(5,5,50,50),new[]{newRoad},new[]{oldRoad}),"unplanned new fragment protected");
- Check(!CompoundRoadPolicy.NewlyPlanned(newRoad,new PlanBezier[0],new[]{oldRoad}),"missing provenance fails closed");return;}
+ Check(!CompoundRoadPolicy.NewlyPlanned(newRoad,new PlanBezier[0],new[]{oldRoad}),"missing provenance fails closed");
+ Check(CompoundRoadPolicy.CaptureCandidate(false,false,false,false,false,true),"new merged entrance road captured");
+ Check(!CompoundRoadPolicy.CaptureCandidate(true,false,false,false,false,true),"existing merged original protected");
+ Check(!CompoundRoadPolicy.CaptureCandidate(false,false,true,false,false,true),"replacement protected");
+ Check(!CompoundRoadPolicy.CaptureCandidate(false,true,false,false,false,true),"deleted merge fragment excluded");
+ Check(!CompoundRoadPolicy.CaptureCandidate(false,false,false,true,false,true),"owned child excluded");
+ Check(!CompoundRoadPolicy.CaptureCandidate(false,false,false,false,true,true),"combined junction excluded");
+ var merged=Line(0,0,0,80);var pieces=new[]{Line(0,0,0,40),Line(0,40,0,80)};
+ Check(CompoundRoadPolicy.NewlyPlanned(merged,pieces,new[]{oldRoad}),"new courses merged at entrance remain removable");
+ Check(!CompoundRoadPolicy.NewlyPlanned(merged,pieces,new[]{Line(0,31,0,33)}),"short preexisting span inside long merge protected");
+ Check(!CompoundRoadPolicy.NewlyPlanned(merged,pieces,new[]{Line(0,0,0,20)}),"mixed old and new entrance preserved");
+ Check(CompoundRoadPolicy.NewlyPlanned(merged,pieces,new[]{Line(-20,40,20,40)}),"crossing is not collinear ownership");
+ Check(!CompoundRoadPolicy.NewlyPlanned(Line(0,1,0,2),pieces,new[]{Line(0,-1000,0,1000)}),"tiny new candidate inside long old road protected");return;}
 if(args.Length>0&&args[0]=="--villa-variety"){
  var lots=Enumerable.Range(0,12).Select(i=>new Parcel{Kind=0,X=i*13,Y=0,W=16,D=16,AssetId="A",PlacementForward=new Point(0,1)}).ToList();
  var varietyAssets=new[]{new Asset{Id="A",Width=16,Depth=16,Homes=2,Height=9},new Asset{Id="B",Width=16,Depth=16,Homes=4,Height=12},new Asset{Id="Rural C",Width=16,Depth=16},new Asset{Id="Wrong size",Width=24,Depth=16}};
@@ -117,6 +141,8 @@ if(args.Length>0&&args[0]=="--court-infill"){CourtInfillTests.Run();return;}if(a
   if(args.Length>0&&args[0]=="--native-access"){ConstructionTests.NativeAccess();return;}
   if(args.Length>0&&args[0]=="--doan-repro"){ConstructionTests.DoanRepro();return;}
   if(args.Length>0&&args[0]=="--construction"){ConstructionTests.Run();return;}
+  if(args.Length>0&&args[0]=="--frame-work"){FrameWorkTests.Run();return;}
+  if(args.Length>0&&args[0]=="--open-space-parking"){OpenSpaceParkingTests.Run();return;}
   if(args.Length>0&&args[0]=="--corners-editing"){CornerEditingTests.Run();return;}
   if(args.Length>0&&args[0]=="--review"){ReviewTests.Run();return;}
   if(args.Length>0&&args[0]=="--codec"){Codec.Test();return;}

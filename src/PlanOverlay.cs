@@ -12,10 +12,11 @@ public partial class PlanOverlay:GameSystemBase {
  readonly Color[] colors=new Color[11];string palette="";float3 cameraPosition;bool hasCamera;
  protected override void OnUpdate(){var s=World.GetExistingSystemManaged<PlanSystem>();var o=Mod.Options;if(s==null||!s.Ready||o==null)return;
   if(UnityEngine.Time.unscaledTime>=nextObservation){nextObservation=UnityEngine.Time.unscaledTime+5;Trace.Sample("overlay.state","open="+s.Open+" draft="+s.Preview.Count+" saved="+s.Saved.Count+" showSaved="+o.ShowSaved+" editAlpha="+o.EditOpacity+" savedAlpha="+o.SavedOpacity);}
-  if(s.Preview.Count==0&&(!o.ShowSaved||s.Saved.Count==0)&&(!s.Open||s.Boundary.Count==0))return;
+  var construction=World.GetExistingSystemManaged<ConstructionTool>();bool warnings=construction?.ShowWarnings==true;
+  if(!warnings&&s.Preview.Count==0&&(!o.ShowSaved||s.Saved.Count==0)&&(!s.Open||s.Boundary.Count==0))return;
   bool drawDraft=s.Open&&(!s.NativeCommitted||s.Mode=="edit")&&World.GetExistingSystemManaged<Game.Tools.ToolSystem>()?.activeTool is PlanTool&&s.Draft!=null&&s.Preview.Count>0&&(s.EditingPlan<0||s.Draft.Parcels.Exists(r=>r.Kind==0));
   visiblePlans.Clear();foreach(var stored in s.Saved){bool editing=s.Open&&stored.Info.Number==s.EditingPlan;if((!o.ShowSaved&&!editing)||(editing&&drawDraft))continue;if(!s.IsBuilt(stored)||stored.Info.Number==s.HoverPlan||stored.Info.Number==s.SelectedPlan)visiblePlans.Add(stored);}
-  if(!drawDraft&&visiblePlans.Count==0)return;
+  if(!drawDraft&&visiblePlans.Count==0&&!warnings)return;
   var strings=o.Colors;string key=string.Join("|",strings);if(key!=palette){palette=key;for(int i=0;i<colors.Length;i++)if(!ColorUtility.TryParseHtmlString(strings[i],out colors[i]))colors[i]=Color.white;colors[7]=Color.white;}
   var camera=Camera.main;hasCamera=camera!=null;if(hasCamera)cameraPosition=camera.transform.position;
   treeDiameters.Clear();foreach(var species in s.Trees)if(!treeDiameters.ContainsKey(species.Id))treeDiameters.Add(species.Id,(float)Math.Max(2,species.Radius*2));
@@ -30,6 +31,7 @@ public partial class PlanOverlay:GameSystemBase {
   if(drawDraft){foreach(var shape in s.Preview)if(!s.Draft.Villa||shape.Kind!=0)Draw(buffer,shape,o.EditOpacity,o.ViewDistance);if(s.Draft.Villa)DrawVillaLots(buffer,s.Draft,s.Elevation,o.ViewDistance);
    DrawTrees(buffer,s.PlannedTrees,s,o.ViewDistance);
   }
+  if(warnings)construction.DrawWarnings(buffer,cameraPosition,hasCamera,o.ViewDistance);
   overlay.AddBufferWriter(default);
  }
  void DrawVillaLots(OverlayRenderSystem.Buffer buffer,Plan plan,float elevation,float distance){

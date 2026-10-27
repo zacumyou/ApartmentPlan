@@ -53,6 +53,7 @@ public partial class PlanSystem {
   var tool=World.GetExistingSystemManaged<ConstructionTool>();if(tool!=null){if(!EntityManager.HasBuffer<PlanOwnedEntity>(stored.Entity))EntityManager.AddBuffer<PlanOwnedEntity>(stored.Entity);var owned=EntityManager.GetBuffer<PlanOwnedEntity>(stored.Entity);var known=new HashSet<Entity>();if(CompoundApplying){for(int i=0;i<owned.Length;i++)known.Add(owned[i].Entity);}else owned.Clear();foreach(var entity in tool.OwnedEntities)if(known.Add(entity))owned.Add(new PlanOwnedEntity{Entity=entity});tool.SaveVerifiedRoads(stored.Entity);}
   if((Draft.Villa?Mod.Options.VillaTileLots:Mod.Options.TileBuildingLots)&&tool!=null)foreach(var entity in tool.OwnedEntities)if(EntityManager.Exists(entity)&&EntityManager.HasComponent<Game.Buildings.Building>(entity)&&!(Draft.Tower&&EntityManager.HasComponent<Game.Prefabs.PrefabRef>(entity)&&Draft.Parcels.Where(r=>r.Kind==6).Any(r=>BuildingPrefabs.TryGetValue(r.AssetId,out var parking)&&parking==EntityManager.GetComponentData<Game.Prefabs.PrefabRef>(entity).m_Prefab))&&!EntityManager.HasComponent<PlanTileLot>(entity))EntityManager.AddComponent<PlanTileLot>(entity);
   if(GrassEnabled&&!EntityManager.HasComponent<PlanGrassWork>(stored.Entity))EntityManager.AddComponentData(stored.Entity,new PlanGrassWork{State=0});
+  RestoreGrowableProtection();
   FinishCompoundAddition(stored);
   LandscapeOpen=false;Open=false;Focused=false;Preview.Clear();SelectedPlan=-1;EditingPlan=-1;Exit();
   Trace.Event("plan.construction.recorded","id="+stored.Info.Number);
@@ -63,6 +64,7 @@ public partial class PlanSystem {
   EditStored();if(EditingPlan!=stored.Info.Number||!Open)return;if(Draft!=null)BeginConstruction();else Status="AP.LegacyBuild";
  }
  void BeginConstruction(){
+  FrontageEvidence.Clear();FrontageMissing=0;
   if(RoadPoints.Count>0){Status="AP.RoadPending";return;}
   EnsurePlanningCatalog();
   if(!catalogReady||CatalogLoading){Status="AP.CatalogLoading";return;}
@@ -80,7 +82,8 @@ public partial class PlanSystem {
   if(Draft.Parcels.Any(p=>p.Kind==2&&p.ParkingSpaces>0)&&!ResolveParkingDecal(out _)){Status="AP.ParkingDecalMissing";return;}
   if(Draft.Parcels.Any(p=>p.Kind==2&&p.ParkingSpaces>0&&(Math.Abs((p.ParkingAlongX?p.W:p.D)/p.ParkingSpaces-ParkingPitch)>.01||(p.ParkingAlongX?p.D:p.W)+.01<DecalDepth))){Status="AP.ParkingDecalRecalculate";return;}
   frontageDetails.Clear();
-  int missingFronts=FrontageNetwork.Missing(Draft,Assets,Network("aisle").Width,Mod.Options.ParkingPavingMargin,frontageDetails);
+  int missingFronts=FrontageNetwork.Missing(Draft,Assets,Network("aisle").Width,Mod.Options.ParkingPavingMargin,frontageDetails,evidence:FrontageEvidence);
+  FrontageMissing=missingFronts;
   foreach(var detail in frontageDetails)Trace.Event("construction.frontage.missing",detail);
   Trace.Event("construction.frontage.network","missing="+missingFronts+" network="+Network("aisle").Id);
   if(missingFronts>0){Status="AP.FrontageRecalculate";return;}

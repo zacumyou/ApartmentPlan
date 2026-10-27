@@ -14,22 +14,22 @@ public partial class ConstructionTool {
   try{
    int total=0,written=0;
    foreach(var e in entities){var t=EntityManager.GetComponentData<Temp>(e);if(t.m_Original!=Entity.Null&&(t.m_Flags&TempFlags.Delete)!=0)total++;}
-   Trace.Event("construction.deletion.summary","blocked="+blocked+" deletionTemps="+total+" allTemps="+entities.Length+" definitions="+definitions.Count+" limit=24 scope=globalTempQuery");
+   Trace.Event("construction.failure.deletion.summary","blocked="+blocked+" deletionTemps="+total+" allTemps="+entities.Length+" definitions="+definitions.Count+" limit=24 scope=globalTempQuery");
    // Prioritize the objects which actually trigger the veto, then road edits.
    for(int pass=0;pass<2;pass++)foreach(var e in entities){
     var t=EntityManager.GetComponentData<Temp>(e);
     if(t.m_Original==Entity.Null||(t.m_Flags&TempFlags.Delete)==0)continue;
     bool allowed=IsNetworkReplacement(t.m_Original,replacementRoots);if(allowed!=(pass==1)||written>=24)continue;
     written++;
-    Trace.Event("construction.deletion.object","blocked="+!allowed+" temp={"+DescribeDeletionEntity(e)+"} original={"+DescribeDeletionEntity(t.m_Original)+"}");
+    Trace.Event("construction.failure.deletion.object","blocked="+!allowed+" temp={"+DescribeDeletionEntity(e)+"} original={"+DescribeDeletionEntity(t.m_Original)+"}");
     TraceDeletionEdges(e);TraceDeletionEdges(t.m_Original);
     int related=0;
     foreach(var other in entities){if(other==e)continue;var state=EntityManager.GetComponentData<Temp>(other);if(state.m_Original!=t.m_Original)continue;
-     if(related++<8)Trace.Event("construction.deletion.related","original="+t.m_Original+" temp={"+DescribeDeletionEntity(other)+"}");
+     if(related++<8)Trace.Event("construction.failure.deletion.related","original="+t.m_Original+" temp={"+DescribeDeletionEntity(other)+"}");
     }
-    if(related>8)Trace.Event("construction.deletion.related.omitted","original="+t.m_Original+" count="+(related-8));
+    if(related>8)Trace.Event("construction.failure.deletion.related.omitted","original="+t.m_Original+" count="+(related-8));
    }
-   if(total>written)Trace.Event("construction.deletion.omitted","count="+(total-written));
+   if(total>written)Trace.Event("construction.failure.deletion.omitted","count="+(total-written));
   }catch(Exception error){Trace.Failure("construction.deletion.diagnostics.failed",error);}
  }
  string DescribeDeletionEntity(Entity e){
@@ -51,8 +51,8 @@ public partial class ConstructionTool {
  void TraceDeletionEdges(Entity node){
   if(node==Entity.Null||!EntityManager.Exists(node)||!EntityManager.HasBuffer<Game.Net.ConnectedEdge>(node))return;
   var edges=EntityManager.GetBuffer<Game.Net.ConnectedEdge>(node,true);
-  for(int i=0;i<edges.Length&&i<8;i++)Trace.Event("construction.deletion.connectedEdge","node="+node+" edge={"+DescribeDeletionEntity(edges[i].m_Edge)+"}");
-  if(edges.Length>8)Trace.Event("construction.deletion.edges.omitted","node="+node+" count="+(edges.Length-8));
+  for(int i=0;i<edges.Length&&i<8;i++)Trace.Event("construction.failure.deletion.connectedEdge","node="+node+" edge={"+DescribeDeletionEntity(edges[i].m_Edge)+"}");
+  if(edges.Length>8)Trace.Event("construction.failure.deletion.edges.omitted","node="+node+" count="+(edges.Length-8));
  }
 }
 }

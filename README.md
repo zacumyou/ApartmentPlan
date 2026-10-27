@@ -35,7 +35,7 @@ Apartment Plan은 구역과 입구를 지정하고, 선택한 아파트 에셋�
 
 ### 참고 사항
 
-- 개발 중인 0.1.78 버전입니다. 중요한 도시는 별도 저장본으로 보관해 주세요.
+- 개발 중인 0.1.82 버전입니다. 중요한 도시는 별도 저장본으로 보관해 주세요.
 - 기존 도로를 손상시킬 수 있는 변경이나 게임이 거부한 배치는 적용되지 않을 수 있습니다.
 - 단지 수정 배치는 기존 시설을 삭제합니다. 삭제 후 배치를 취소해도 시설이 자동 복원되지는 않습니다.
 - 단지에 사용한 건물·도로 에셋은 세이브의 의존성이 될 수 있습니다. 구독 해제 후 로드를 보장하지 않습니다.
@@ -84,7 +84,7 @@ Inspired by [Parking Lot Tool](https://mods.paradoxplaza.com/mods/161156/Windows
 
 ### Notes
 
-- Version 0.1.78 is in development. Keep a separate save of important cities.
+- Version 0.1.82 is in development. Keep a separate save of important cities.
 - Construction may be blocked when it would damage existing roads or fails the game's validation.
 - Compound replacement removes existing facilities. Cancelling placement afterwards does not automatically restore them.
 - Placed building and road assets may remain save dependencies. Loading after unsubscribing is not guaranteed.

@@ -26,7 +26,7 @@ public partial class ConstructionTool {
    var prefab=EntityManager.GetComponentData<PrefabRef>(e).m_Prefab;
    bool road=EntityManager.HasComponent<RoadData>(prefab),path=EntityManager.HasComponent<PathwayData>(prefab);
    if(!road&&!path)continue;
-   if(villaStage<2)preexistingRoadCurves.Add(RoadCurve(EntityManager.GetComponentData<Game.Net.Curve>(e).m_Bezier));
+   if(villaStage<2)IndexExistingRoad(RoadCurve(EntityManager.GetComponentData<Game.Net.Curve>(e).m_Bezier));
    IndexCurve(index,new ConnectionCandidate{Entity=e,Curve=EntityManager.GetComponentData<Game.Net.Curve>(e).m_Bezier,Path=!road},1.5f);count++;
   }
   Trace.Event("construction.connections.snapshot","roads="+count+" scans=1");

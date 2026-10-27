@@ -50,7 +50,7 @@ public partial class PlanTool:ToolBaseSystem {
   CollectWorld(hit.m_HitPosition);var raw=new Point(hit.m_HitPosition.x,hit.m_HitPosition.z);var snap=BoundarySnap.Solve(raw,drag>=0?new List<Point>():s.Boundary,nearby,referenceAxis,Mod.Options.SnapDistance,Mod.Options.CloseDistance,Mod.Options.SnapDirections,Mod.Options.SnapGuides,s.Mode=="boundary"&&drag<0);
   // Read the press position at the input event, before a fast drag has moved
   // the cursor. The terrain raycast can otherwise report only its final point.
-  if(drag<0&&capturedPress&&s.Mode!="boundary"&&GroundAtScreen(pressScreen,s.Elevation,out var start)){
+  if(drag<0&&capturedPress&&s.Mode!="boundary"&&s.Mode!="entrance"&&GroundAtScreen(pressScreen,s.Elevation,out var start)){
    int picked=BoundaryEditing.Hit(s.Boundary,start,true,out bool pickedEdge);
    if(picked>=0)BeginBoundaryDrag(s,picked,pickedEdge,start);
   }
@@ -79,12 +79,12 @@ public partial class PlanTool:ToolBaseSystem {
   bool validCandidate=snap.Close?Layout.Valid(s.Boundary):Layout.CanAppend(s.Boundary,snap.Position);
   var last=s.Boundary.Count>0?s.Boundary[s.Boundary.Count-1]:snap.Position;double length=(snap.Position-last).Length;double angle=0;if(s.Boundary.Count>=2){var previous=last-s.Boundary[s.Boundary.Count-2];var next=snap.Position-last;angle=Math.Atan2(Math.Abs(Layout.Cross(previous,next)),BoundarySnap.Dot(previous,next))*180/Math.PI;}
   Hint=snap.Close?"AP.CloseSnap":string.Format(System.Globalization.CultureInfo.InvariantCulture,"{0:0.0}m / {1:0.0} deg",length,angle,snap.Kind);if(s.Mode!="boundary")Hint="AP.BoundaryDrag";if(s.Mode=="entrance"&&!s.Villa){var gate=SiteFrame.Nearest(s.Boundary,raw,out _);Hint=(raw-gate).Length<=16&&EntranceSpacing.Near(gate,s.Entrances)?"AP.EntranceNearbyAdvisory":"AP.PickEntrance";}Trace.Sample("snap.kind","kind="+snap.Kind+" close="+snap.Close);
-  if(applyAction.WasPressedThisFrame()&&drag<0){
+  if((capturedPress||applyAction.WasPressedThisFrame())&&drag<0){
    if(snap.Close){if(validCandidate)s.Request("finish");else Trace.Event("boundary.close.rejected","invalid polygon");}
    else {
-    if(hover>=0)BeginBoundaryDrag(s,hover,hoverEdge,raw);
+    if(s.Mode=="entrance")s.Click(hit.m_HitPosition);
+    else if(hover>=0)BeginBoundaryDrag(s,hover,hoverEdge,raw);
     else if(s.Mode=="boundary"&&validCandidate){if(s.Boundary.Count==0&&snap.Axis.Length>.5)referenceAxis=snap.Axis;s.Click(WorldPoint(snap.Position,hit.m_HitPosition.y));}
-    else if(s.Mode=="entrance")s.Click(hit.m_HitPosition);
     else Trace.Event("boundary.point.rejected","mode="+s.Mode+" selfCross="+!validCandidate);
    }
   }

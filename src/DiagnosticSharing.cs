@@ -12,8 +12,11 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 namespace ApartmentPlan {
 public partial class PlanSystem {
- static readonly HashSet<string> SharedMetricKeys=new HashSet<string>{"DeleteObjects","ForeignObjects","MissingObjects","Errors","CarJunctions","Buildings","Frontage","Bays","ParkingLinks","PedestrianWarnings","Power","Water","Sewage","PowerDemand","PowerSupplied","WaterDemand","WaterSupplied","Trees","RoadCandidates","AisleCandidates","Edges","DiagnosticVersion","FailureStage","FailureFlags","ExpectedBuildings","ExpectedTrees","ExpectedPavement","ExpectedBays","Pavement","AttachedBays","BlockedDeletions","NetworkReplacements","NativeErrorEntities","NativeErrorCode","AttachmentPass","SurfacePass"};
+ static readonly HashSet<string> SharedMetricKeys=new HashSet<string>{"DeleteObjects","ForeignObjects","MissingObjects","Errors","CarJunctions","Buildings","Frontage","Bays","ParkingLinks","PedestrianWarnings","Power","Water","Sewage","PowerDemand","PowerSupplied","WaterDemand","WaterSupplied","Trees","RoadCandidates","AisleCandidates","Edges","DiagnosticVersion","FailureStage","FailureFlags","ExpectedBuildings","ExpectedTrees","ExpectedPavement","ExpectedBays","Pavement","AttachedBays","BlockedDeletions","NetworkReplacements","NativeErrorEntities","NativeErrorCode","AttachmentPass","SurfacePass","FrontageMissing","EvidenceTotal","EvidenceOmitted","ValidationCompleted","PreviewTempCount","ReplacementRoots","SubmittedCourses","SubmittedConnections"};
  internal Dictionary<string,int> NativeFailureSnapshot;
+ internal readonly List<Dictionary<string,int>> FrontageEvidence=new List<Dictionary<string,int>>();
+ internal List<Dictionary<string,int>> NativeFailureEvidence;
+ internal int FrontageMissing;
  const string ReportEndpoint="https://chosho.mycafe24.com/ap-report/submit.php";
  string diagnosticShareStatus="AP.ShareDiagnostics",pendingReport;
  bool diagnosticShareDialog,diagnosticShareDisposed;
@@ -24,6 +27,8 @@ public partial class PlanSystem {
  // Explicit field allowlist: never send clipboard reports, trace text, paths or save data.
  string CreateSharedDiagnostic(){
   var metrics=Status=="AP.NativeBlocked"&&NativeFailureSnapshot!=null?NativeFailureSnapshot:HasCurrentNativeReport?World.GetExistingSystemManaged<ConstructionTool>()?.Metrics:null;
+  if(Status=="AP.FrontageRecalculate")metrics=new Dictionary<string,int>{{"DiagnosticVersion",2},{"FrontageMissing",FrontageMissing}};
+  var evidence=Status=="AP.FrontageRecalculate"?FrontageEvidence:Status=="AP.NativeBlocked"?NativeFailureEvidence:null;
   var counts=new Dictionary<string,int>{
    {"boundaryPoints",Boundary.Count},{"entrances",Entrances.Count},{"selectedAssets",Selected.Count},
    {"buildings",Draft?.Parcels.Count(p=>p.Kind==0)??0},{"parking",Draft?.Parcels.Sum(p=>p.ParkingSpaces)??0},
@@ -33,7 +38,7 @@ public partial class PlanSystem {
    modVersion=typeof(Mod).Assembly.GetName().Version.ToString(),
    gameVersion=SafeReportCode(UnityEngine.Application.version),status=SafeReportCode(Status),mode=SafeReportCode(Mode),
    layoutPending=LayoutPending,layoutOutdated=LayoutOutdated,buildingPattern=Mod.Options.BuildingPattern,
-   counts,nativeMetrics=(metrics??new Dictionary<string,int>()).Where(p=>SharedMetricKeys.Contains(p.Key)).Take(64).ToDictionary(p=>p.Key,p=>p.Value)
+   failureDetails=(evidence??new List<Dictionary<string,int>>()).Take(24).ToArray(),counts,nativeMetrics=(metrics??new Dictionary<string,int>()).Where(p=>SharedMetricKeys.Contains(p.Key)).Take(64).ToDictionary(p=>p.Key,p=>p.Value)
   });
  }
  static string SafeReportCode(string value)=>value!=null&&Regex.IsMatch(value,@"\A[A-Za-z0-9][A-Za-z0-9_.-]{0,95}\z")?value:"unknown";

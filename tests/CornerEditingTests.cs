@@ -22,6 +22,11 @@ static class CornerEditingTests {
   Check(BoundaryEditing.Hit(square,new Point(1,1),true,out bool edge)==0&&!edge,"vertex gets priority over edge");
   Check(BoundaryEditing.Hit(square,new Point(50,2),true,out edge)==0&&edge,"closed edge can be picked");
   Check(BoundaryEditing.Hit(square,new Point(50,2),false,out edge)==-1,"unfinished polygon has no closed edge drag");
+  var inserted=square.ToList();
+  Check(BoundaryEditing.Insert(inserted,new Point(1,1))==-1&&inserted.Count==4,"vertex snap does not insert another vertex");
+  Check(BoundaryEditing.Insert(inserted,new Point(50,2))==1&&inserted.Count==5&&inserted[1].X==50&&inserted[1].Y==0,"edge click inserts projected vertex without changing boundary");
+  Check(Math.Abs(Layout.SignedArea(inserted)-Layout.SignedArea(square))<.001,"insertion preserves area");
+  Check(BoundaryEditing.Insert(inserted,new Point(50,50))==-1,"interior click does not insert");
   var moved=square.ToArray();BoundaryEditing.Move(square,moved,0,true,new Point(0,-10));
   var entrance=BoundaryEditing.Follow(square,moved,new Point(25,0));
   Check(entrance.X==25&&entrance.Y==-10&&moved[2].Y==100,"edge drag carries entrance and preserves other vertices");

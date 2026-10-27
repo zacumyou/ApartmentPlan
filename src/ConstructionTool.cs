@@ -33,22 +33,23 @@ public partial class ConstructionTool:ToolBaseSystem {
  internal readonly Dictionary<string,int> Metrics=new Dictionary<string,int>();internal string Notice="";
  PlanSystem Plans=>World.GetExistingSystemManaged<PlanSystem>();
  protected override void OnCreate(){base.OnCreate();temps=GetEntityQuery(ComponentType.ReadOnly<Temp>(),ComponentType.Exclude<Deleted>());}
- protected override void OnStartRunning(){base.OnStartRunning();RunGeneration++;if(Plans!=null)Plans.NativeFailureSnapshot=null;failureStage=0;forceDemolitionStage=0;preexistingRoadCurves.Clear();ResetProgress();demolitionPrompted=false;villaStage=0;roadWaitFrames=roadStableFrames=0;roadSignature=-1;stagedRoads.Clear();frame=0;attachmentPass=0;surfacePass=0;submitted=false;applyRequested=false;committed=false;Valid=false;Report="";Notice="";Metrics.Clear();expectedPavement.Clear();appliedPavement.Clear();pavementPrefab=Entity.Null;expectedTrees.Clear();appliedTrees.Clear();expected.Clear();expectedBays.Clear();bayDefinitions.Clear();appliedBuildings.Clear();appliedBays.Clear();OwnedEntities.Clear();previewRefreshAt=0;StartDemolitionRequest();}
- protected override void OnStopRunning(){RunGeneration++;if(Plans!=null)Plans.NativeFailureSnapshot=null;failureStage=0;forceDemolitionStage=0;previewRefreshAt=0;ClearDefinitions();applyMode=ApplyMode.Clear;Valid=false;base.OnStopRunning();}
+ protected override void OnStartRunning(){base.OnStartRunning();RunGeneration++;ClearWarnings();ClearEvidence();if(Plans!=null){Plans.NativeFailureSnapshot=null;Plans.NativeFailureEvidence=null;}failureStage=0;forceDemolitionStage=0;preexistingRoadIndex=new SpatialLookup<PlanBezier>(64);ResetProgress();demolitionPrompted=false;villaStage=0;roadWaitFrames=roadStableFrames=0;roadSignature=-1;stagedRoads.Clear();frame=0;attachmentPass=0;surfacePass=0;submitted=false;applyRequested=false;committed=false;Valid=false;Report="";Notice="";Metrics.Clear();expectedPavement.Clear();appliedPavement.Clear();pavementPrefab=Entity.Null;expectedTrees.Clear();appliedTrees.Clear();expected.Clear();expectedBays.Clear();bayDefinitions.Clear();appliedBuildings.Clear();appliedBays.Clear();OwnedEntities.Clear();previewRefreshAt=0;StartDemolitionRequest();}
+ protected override void OnStopRunning(){RunGeneration++;ClearWarnings();ClearEvidence();failureStage=0;forceDemolitionStage=0;previewRefreshAt=0;ClearDefinitions();applyMode=ApplyMode.Clear;Valid=false;base.OnStopRunning();}
  internal void Apply(){if(Valid&&!committed){ResetProgress();applyRequested=true;}}
  void ClearDefinitions(){deferDefinitions=false;previewWork?.Dispose();previewWork=null;validation=null;foreach(var e in definitions)if(EntityManager.Exists(e))EntityManager.DestroyEntity(e);definitions.Clear();submittedConnections.Clear();submittedCourses.Clear();}
  int failureStage;
  void CaptureFailure(){
-  Metrics["DiagnosticVersion"]=1;Metrics["FailureStage"]=failureStage;
+  Metrics["DiagnosticVersion"]=2;Metrics["EvidenceTotal"]=evidenceTotal;Metrics["EvidenceOmitted"]=System.Math.Max(0,evidenceTotal-failureEvidence.Count);Metrics["FailureStage"]=failureStage;
   Metrics["ExpectedBuildings"]=expected.Count;Metrics["ExpectedTrees"]=expectedTrees.Count;
   Metrics["ExpectedPavement"]=expectedPavement.Count;Metrics["ExpectedBays"]=expectedBays.Count;
   Metrics["Buildings"]=validation?.Buildings.Count??(Metrics.TryGetValue("Buildings",out var matched)?matched:appliedBuildings.Count);Metrics["Trees"]=appliedTrees.Count;
   Metrics["Pavement"]=appliedPavement.Count;Metrics["Bays"]=appliedBays.Count;
   Metrics["AttachmentPass"]=attachmentPass;Metrics["SurfacePass"]=surfacePass;
-  if(Plans!=null)Plans.NativeFailureSnapshot=new Dictionary<string,int>(Metrics);
+  if(Plans!=null){Plans.NativeFailureSnapshot=new Dictionary<string,int>(Metrics);Plans.NativeFailureEvidence=new List<Dictionary<string,int>>(failureEvidence);}
+  Trace.Event("construction.failure.evidence",Newtonsoft.Json.JsonConvert.SerializeObject(failureEvidence),true);
   Trace.Event("construction.failure.metrics",string.Join(" ",Metrics.Select(p=>p.Key+"="+p.Value)));
  }
- void Status(string key,string detail=""){var s=Plans;if(s==null)return;if(key=="AP.NativeBlocked")CaptureFailure();if(key=="AP.NativeBlocked"&&s.Status!=key)s.Sound(PlanSound.Fail);s.Status=key;Report=detail;s.Revision++;Trace.Event("construction."+key,detail);}
+ void Status(string key,string detail=""){var s=Plans;if(s==null)return;if(key=="AP.NativeBlocked"){CaptureFailure();if(WarningShapes.Count>0)Notice=warningNotice.Length>0?warningNotice:"AP.Warning.Native";}else if(key=="AP.NativeReady"||key=="AP.NativeApplied")ClearWarnings();if(key=="AP.NativeBlocked"&&s.Status!=key)s.Sound(PlanSound.Fail);s.Status=key;Report=detail;s.Revision++;Trace.Event("construction."+key,detail);}
  FrameWork previewWork;ValidationResult validation;
  bool AdvanceWork(){
   if(!previewWork.Step())return false;
@@ -84,7 +85,7 @@ public partial class ConstructionTool:ToolBaseSystem {
    if(Valid)SetProgress(100);
    Status(Valid?(Demolishing?"AP.DemolitionReady":"AP.NativeReady"):"AP.NativeBlocked",detail);
    if(Demolishing&&Valid&&!demolitionPrompted){demolitionPrompted=true;s.Request("nativeConfirmDemolition");}
-   if(applyRequested){applyRequested=false;if(!Valid)return deps;if(!Demolishing&&(s.Draft?.Villa==true||s.Draft?.Tower==true)&&villaStage==0&&Plans?.Draft?.VillaExistingRoadsOnly!=true){CaptureOwnership();stagedRoads.AddRange(OwnedEntities);CheckpointRoads();ClearDefinitions();applyMode=ApplyMode.Apply;villaStage=1;frame=0;Valid=false;Status("AP.RoadStageWaiting");return deps;}if(!Demolishing){appliedBuildings.AddRange(buildings);CaptureOwnership();}ClearDefinitions();applyMode=ApplyMode.Apply;committed=true;frame=0;Valid=false;if(Demolishing){s.NativeAuditAvailable=false;s.Request("nativeScheduleDemolition",demolitionPlan.ToString());Status("AP.DemolitionApplied");s.Sound(PlanSound.Demolish);}else{s.NativeCommitted=true;s.NativeAuditAvailable=true;s.Request("nativeRecordCommit");Status("AP.NativeApplied");s.Sound(PlanSound.Build);}}
+   if(applyRequested){applyRequested=false;if(!Valid)return deps;if(!Demolishing&&(s.Draft?.Villa==true||s.Draft?.Tower==true)&&villaStage==0&&Plans?.Draft?.VillaExistingRoadsOnly!=true){CaptureOwnership();stagedRoads.AddRange(OwnedEntities);CheckpointRoads();ClearDefinitions();applyMode=ApplyMode.Apply;villaStage=1;frame=0;Valid=false;Status("AP.RoadStageWaiting");return deps;}if(!Demolishing){appliedBuildings.AddRange(buildings);CaptureOwnership();foreach(var building in appliedBuildings)World.GetOrCreateSystemManaged<CompoundGrowableProtection>().Include(building);}ClearDefinitions();applyMode=ApplyMode.Apply;committed=true;frame=0;Valid=false;if(Demolishing){s.NativeAuditAvailable=false;s.Request("nativeScheduleDemolition",demolitionPlan.ToString());Status("AP.DemolitionApplied");s.Sound(PlanSound.Demolish);}else{s.NativeCommitted=true;s.NativeAuditAvailable=true;s.Request("nativeRecordCommit");Status("AP.NativeApplied");s.Sound(PlanSound.Build);}}
   }catch(Exception error){Metrics["FailureFlags"]=1024;Metrics["Buildings"]=validation?.Buildings.Count??0;forceDemolitionStage=0;if(villaStage==1||villaStage==2)villaStage=4;Valid=false;applyRequested=false;previewRefreshAt=0;ClearDefinitions();applyMode=ApplyMode.Clear;submitted=true;frame=9;Notice=stagedRoads.Count>0?"AP.RoadStagePartial":"AP.Native.Details";Trace.Failure("construction.failed",error);Status("AP.NativeBlocked",error.Message);}
   return deps;
  }
@@ -208,6 +209,7 @@ public partial class ConstructionTool:ToolBaseSystem {
   return new CoursePos{m_Entity=connected,m_SplitPosition=split,m_Position=p,m_Rotation=Game.Net.NetUtils.GetNodeRotation(tangent),m_CourseDelta=start?0:1,m_Elevation=float2.zero,m_Flags=start?CoursePosFlags.IsFirst:CoursePosFlags.IsLast,m_ParentMesh=-1};
  }
  void TraceErrors(Entity e){
+  WarningEntity(e);Evidence(e,2);
   var names=new List<string>();
   if(EntityManager.HasBuffer<Game.Notifications.IconElement>(e))foreach(var item in EntityManager.GetBuffer<Game.Notifications.IconElement>(e,true)){
    if(!EntityManager.HasComponent<PrefabRef>(item.m_Icon))continue;
@@ -218,7 +220,7 @@ public partial class ConstructionTool:ToolBaseSystem {
   string geometry="";
   if(EntityManager.HasComponent<Game.Net.Curve>(e)){var c=EntityManager.GetComponentData<Game.Net.Curve>(e).m_Bezier;geometry=" length="+MathUtils.Length(c)+" a="+c.a+" b="+c.b+" c="+c.c+" d="+c.d;}
   if(EntityManager.HasComponent<Game.Net.Composition>(e)){var comp=EntityManager.GetComponentData<Game.Net.Composition>(e);foreach(var n in new[]{comp.m_StartNode,comp.m_EndNode})if(EntityManager.HasComponent<NetCompositionData>(n))geometry+=" nodeFlags="+EntityManager.GetComponentData<NetCompositionData>(n).m_Flags.m_General;}
-  Trace.Event("construction.native.error","entity="+e+" prefab="+prefab+" reasons="+string.Join(",",names)+" stage="+villaStage+geometry);
+  Trace.Event("construction.failure.native.error","entity="+e+" prefab="+prefab+" reasons="+string.Join(",",names)+" stage="+villaStage+geometry);
  }
  bool Live(Entity e)=>e!=Entity.Null&&EntityManager.Exists(e)&&!EntityManager.HasComponent<Deleted>(e)&&!EntityManager.HasComponent<Temp>(e);
  bool RealLane(Entity e)=>Live(e)&&!EntityManager.HasComponent<Game.Net.SlaveLane>(e)&&(!EntityManager.HasComponent<PrefabRef>(e)||!EntityManager.HasComponent<NetLaneData>(EntityManager.GetComponentData<PrefabRef>(e).m_Prefab)||(EntityManager.GetComponentData<NetLaneData>(EntityManager.GetComponentData<PrefabRef>(e).m_Prefab).m_Flags&LaneFlags.Virtual)==0);

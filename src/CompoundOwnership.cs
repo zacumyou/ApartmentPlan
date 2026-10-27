@@ -95,7 +95,14 @@ public partial class ConstructionTool {
   if(Demolishing&&requestedDemolitionTargets!=null)foreach(var e in requestedDemolitionTargets)demolitionTargets.Add(e);
   requestedDemolition=-1;requestedDemolitionTargets=null;
  }
- readonly List<PlanBezier> preexistingRoadCurves=new List<PlanBezier>();
+ SpatialLookup<PlanBezier> preexistingRoadIndex=new SpatialLookup<PlanBezier>(64);
+ static void RoadBounds(PlanBezier c,out double x0,out double y0,out double x1,out double y1){
+  x0=Math.Min(Math.Min(c.A.X,c.B.X),Math.Min(c.C.X,c.D.X))-.5;y0=Math.Min(Math.Min(c.A.Y,c.B.Y),Math.Min(c.C.Y,c.D.Y))-.5;
+  x1=Math.Max(Math.Max(c.A.X,c.B.X),Math.Max(c.C.X,c.D.X))+.5;y1=Math.Max(Math.Max(c.A.Y,c.B.Y),Math.Max(c.C.Y,c.D.Y))+.5;
+ }
+ void IndexExistingRoad(PlanBezier c){RoadBounds(c,out var x0,out var y0,out var x1,out var y1);preexistingRoadIndex.Add(c,x0,y0,x1,y1);}
+ IEnumerable<PlanBezier> ExistingRoadsNear(PlanBezier c){RoadBounds(c,out var x0,out var y0,out var x1,out var y1);return preexistingRoadIndex.Within(x0,y0,x1,y1);}
+
  static PlanBezier RoadCurve(Colossal.Mathematics.Bezier4x3 c)=>new PlanBezier{A=new Point(c.a.x,c.a.z),B=new Point(c.b.x,c.b.z),C=new Point(c.c.x,c.c.z),D=new Point(c.d.x,c.d.z)};
  internal void SaveVerifiedRoads(Entity plan){
   if(!EntityManager.HasBuffer<PlanBuiltRoad>(plan))EntityManager.AddBuffer<PlanBuiltRoad>(plan);
@@ -104,17 +111,19 @@ public partial class ConstructionTool {
  }
  void CaptureOwnership(){
   OwnedEntities.Clear();OwnedEntities.AddRange(stagedRoads.Where(Live));OwnedEntities.AddRange(appliedTrees);OwnedEntities.AddRange(appliedBuildings);OwnedEntities.AddRange(appliedBays);OwnedEntities.AddRange(appliedPavement);
+  int unverified=0;var planned=submittedCourses.GroupBy(c=>c.Prefab).ToDictionary(g=>g.Key,g=>g.Select(c=>RoadCurve(c.Curve)).ToArray());
   using(var entities=temps.ToEntityArray(Allocator.Temp))foreach(var e in entities){
    if(Plans?.Draft?.VillaExistingRoadsOnly==true)continue;
    var t=EntityManager.GetComponentData<Temp>(e);
    // Existing roads (including their split/replacement previews) are never owned.
-   if(t.m_Original!=Entity.Null||(t.m_Flags&(TempFlags.Delete|TempFlags.Replace|TempFlags.Combine))!=0||EntityManager.HasComponent<Owner>(e))continue;
+   if(!CompoundRoadPolicy.CaptureCandidate(t.m_Original!=Entity.Null,(t.m_Flags&TempFlags.Delete)!=0,(t.m_Flags&TempFlags.Replace)!=0,EntityManager.HasComponent<Owner>(e),EntityManager.HasComponent<Game.Net.Node>(e),(t.m_Flags&TempFlags.Combine)!=0))continue;
    if(EntityManager.HasComponent<Game.Net.Edge>(e)){
-    if(!EntityManager.HasComponent<Game.Net.Curve>(e)||!CompoundRoadPolicy.NewlyPlanned(RoadCurve(EntityManager.GetComponentData<Game.Net.Curve>(e).m_Bezier),submittedCourses.Select(c=>RoadCurve(c.Curve)),preexistingRoadCurves))continue;
+    if(!EntityManager.HasComponent<Game.Net.Curve>(e)||!EntityManager.HasComponent<PrefabRef>(e)||!planned.TryGetValue(EntityManager.GetComponentData<PrefabRef>(e).m_Prefab,out var courses)||!CompoundRoadPolicy.NewlyPlanned(RoadCurve(EntityManager.GetComponentData<Game.Net.Curve>(e).m_Bezier),courses,ExistingRoadsNear(RoadCurve(EntityManager.GetComponentData<Game.Net.Curve>(e).m_Bezier)))){unverified++;continue;}
     OwnedEntities.Add(e);
    }else if(EntityManager.HasComponent<Game.Net.Node>(e))OwnedEntities.Add(e);
   }
   Trace.Event("plan.ownership.capture","roots="+OwnedEntities.Count);
+  if(unverified>0)Trace.Event("construction.ownership.unverified","newRoads="+unverified+"; excluded from deletion ownership",true);
  }
  bool OwnedNode(Entity node){
   if(!EntityManager.HasBuffer<Game.Net.ConnectedEdge>(node))return false;

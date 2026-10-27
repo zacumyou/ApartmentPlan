@@ -57,15 +57,15 @@ public partial class ConstructionTool {
   }return false;
  }
  IEnumerable<int> ValidateSteps(ValidationResult result){
-  failureStage=4;Metrics.Clear();SetProgress(80);
+  failureStage=4;ClearWarnings();ClearEvidence();Metrics.Clear();Metrics["ValidationCompleted"]=0;SetProgress(80);
   int edges=0,errors=0,blocked=0,replacements=0;var buildings=result.Buildings;
   var candidates=new List<Tuple<Entity,Entity,Game.Objects.Transform>>();
   temps.CompleteDependency();
   using(var entities=temps.ToEntityArray(Allocator.Temp)){
-   var roots=NetworkReplacementRoots(entities);
+   var roots=NetworkReplacementRoots(entities);Metrics["PreviewTempCount"]=entities.Length;Metrics["ReplacementRoots"]=roots.Count;Metrics["SubmittedCourses"]=submittedCourses.Count;Metrics["SubmittedConnections"]=submittedConnections.Count;
    foreach(var e in entities){var t=EntityManager.GetComponentData<Temp>(e);
     if(EntityManager.HasComponent<Error>(e)){errors++;TraceErrors(e);}
-    if(t.m_Original!=Entity.Null&&(t.m_Flags&TempFlags.Delete)!=0){if(IsNetworkReplacement(t.m_Original,roots))replacements++;else blocked++;}
+    if(t.m_Original!=Entity.Null&&(t.m_Flags&TempFlags.Delete)!=0){if(IsNetworkReplacement(t.m_Original,roots))replacements++;else {blocked++;Evidence(t.m_Original,1,(int)t.m_Flags);WarningEntity(t.m_Original);warningNotice="AP.Warning.Protected";}}
     if(EntityManager.HasComponent<Game.Net.Edge>(e))edges++;
     if(t.m_Original==Entity.Null&&(t.m_Flags&TempFlags.Delete)==0&&EntityManager.HasComponent<Game.Buildings.Building>(e)&&EntityManager.HasComponent<Game.Objects.Transform>(e)&&EntityManager.HasComponent<PrefabRef>(e))
      candidates.Add(Tuple.Create(e,EntityManager.GetComponentData<PrefabRef>(e).m_Prefab,EntityManager.GetComponentData<Game.Objects.Transform>(e)));
@@ -79,7 +79,7 @@ public partial class ConstructionTool {
   foreach(var target in expected){Entity found=Entity.Null;foreach(var c in candidates){
    if(buildings.Contains(c.Item1)||c.Item2!=target.Item1||math.distancesq(c.Item3.m_Position,target.Item2)>=1||math.abs(math.dot(c.Item3.m_Rotation.value,target.Item3.value))<=.999)continue;
    found=c.Item1;break;
-  }if(found==Entity.Null){Metrics["FailureFlags"]=2;result.Detail="Native building preview incomplete: "+buildings.Count+"/"+expected.Count;yield break;}buildings.Add(found);yield return 0;}
+  }if(found==Entity.Null){WarningObject(target.Item1,target.Item2,target.Item3,true);warningNotice="AP.Warning.Missing";Metrics["FailureFlags"]=2;result.Detail="Native building preview incomplete: "+buildings.Count+"/"+expected.Count;yield break;}buildings.Add(found);yield return 0;}
   failureStage=5;SetProgress(84);
   foreach(var step in ValidateTreesSteps())yield return step;
   if(appliedTrees.Count!=expectedTrees.Count){Metrics["FailureFlags"]=4;result.Detail="Native tree preview incomplete: "+appliedTrees.Count+"/"+expectedTrees.Count;yield break;}
@@ -96,17 +96,19 @@ public partial class ConstructionTool {
   foreach(var b in buildings){if(!PreviewExists(b)){Metrics["FailureFlags"]=16;result.Detail="Native preview changed during validation; reopen preview";yield break;}
    if(EntityManager.GetComponentData<Game.Buildings.Building>(b).m_RoadEdge!=Entity.Null)frontage++;
    var road=EntityManager.GetComponentData<Game.Buildings.Building>(b).m_RoadEdge;var draft=World.GetExistingSystemManaged<PlanSystem>()?.Draft;bool external=draft?.Villa==true&&road!=Entity.Null&&!VillaInternalRoad(road,draft);
-   if(!external&&HasFrontageCandidate(b,frontageIndex))roadCandidates++;yield return 0;
+   if(!external&&HasFrontageCandidate(b,frontageIndex))roadCandidates++;else if(Mod.Options.RequireBuildingRoad||draft?.Villa==true){Evidence(b,3);WarningEntity(b,true);warningNotice="AP.Warning.Frontage";}yield return 0;
   }
   foreach(var bay in appliedBays){
    yield return 0;
-   if(!PreviewExists(bay)||!EntityManager.HasComponent<Game.Objects.Attached>(bay))continue;
+   if(!PreviewExists(bay)||!EntityManager.HasComponent<Game.Objects.Attached>(bay)){Evidence(bay,4);WarningEntity(bay,true);warningNotice="AP.Warning.Parking";continue;}
    var parent=EntityManager.GetComponentData<Game.Objects.Attached>(bay).m_Parent;
-   if(!EntityManager.Exists(parent)||EntityManager.HasComponent<Deleted>(parent)||!EntityManager.HasComponent<Game.Net.Edge>(parent))continue;attached++;
+   if(!EntityManager.Exists(parent)||EntityManager.HasComponent<Deleted>(parent)||!EntityManager.HasComponent<Game.Net.Edge>(parent)){Evidence(bay,4);WarningEntity(bay,true);warningNotice="AP.Warning.Parking";continue;}attached++;
+   int previousAisles=aisleCandidates;
    if(EntityManager.HasBuffer<Game.Net.SubLane>(parent))foreach(var lane in EntityManager.GetBuffer<Game.Net.SubLane>(parent,true))if(EntityManager.Exists(lane.m_SubLane)&&!EntityManager.HasComponent<Deleted>(lane.m_SubLane)&&EntityManager.HasComponent<Game.Net.CarLane>(lane.m_SubLane)){aisleCandidates++;break;}
+   if(aisleCandidates==previousAisles){Evidence(bay,4);WarningEntity(bay,true);warningNotice="AP.Warning.Parking";}
    if(ParkingConnected(bay,false,out _,out _))parkingLinks++;
   }
-  SetProgress(99);
+  SetProgress(99);Metrics["ValidationCompleted"]=1;
   // No native error suppression, and Apply runs a fresh validation iterator.
   m_ErrorQuery.CompleteDependency();
   result.Detail="buildings="+buildings.Count+" road="+frontage+" roadCandidates="+roadCandidates+" bays="+appliedBays.Count+"/"+expectedBays.Count+" attached="+attached+" aisleCandidates="+aisleCandidates+" parkingLinks="+parkingLinks+" networkEdges="+edges+" "+pavement+" errors="+errors;

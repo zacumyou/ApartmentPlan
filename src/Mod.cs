@@ -14,6 +14,7 @@ public sealed class Mod:IMod {
   updates.UpdateAfter<InvisibleRoadPrefabAudit,Game.Prefabs.NetInitializeSystem>(SystemUpdatePhase.PrefabUpdate);
   updates.UpdateBefore<BeforePlanSerialization,Game.Serialization.BeginPrefabSerializationSystem>(SystemUpdatePhase.Serialize);
   updates.UpdateAfter<AfterPlanSerialization,Game.Serialization.EndPrefabSerializationSystem>(SystemUpdatePhase.Serialize);
+  updates.UpdateBefore<CompoundGrowableProtection,Game.Simulation.CondemnedBuildingSystem>(SystemUpdatePhase.GameSimulation);
   updates.UpdateBefore<PlanAudio,Game.Audio.AudioManager>(SystemUpdatePhase.Cleanup);
   updates.UpdateAt<PlanSystem>(SystemUpdatePhase.Modification1);updates.UpdateAt<LotSurfaceReplacement>(SystemUpdatePhase.Modification2);updates.UpdateAt<InvisibleRoadRefresh>(SystemUpdatePhase.Modification1);updates.UpdateAt<GrassIntegration>(SystemUpdatePhase.Modification2);updates.UpdateAt<PlanTool>(SystemUpdatePhase.ToolUpdate);updates.UpdateAt<ConstructionTool>(SystemUpdatePhase.ToolUpdate);updates.UpdateAt<PlanUI>(SystemUpdatePhase.UIUpdate);updates.UpdateAt<PlanSelection>(SystemUpdatePhase.ToolUpdate);updates.UpdateAt<PlanOverlay>(SystemUpdatePhase.ToolUpdate);updates.UpdateAfter<InvisibleRoadHover,Game.Tools.BulldozeToolSystem>(SystemUpdatePhase.ToolUpdate);Trace.Event("mod.load.complete","systems=PlanSystem,PlanTool,PlanUI,PlanOverlay");Log.Info("ApartmentPlan "+typeof(Mod).Assembly.GetName().Version+" loaded; standard diagnostic logging enabled.");}catch(System.Exception e){Trace.Failure("mod.load.failed",e);throw;}
  }

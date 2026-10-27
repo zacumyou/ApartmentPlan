@@ -12,12 +12,16 @@ static class FrontageReportTests {
   p.Parcels.Add(new Parcel{Kind=0,AssetId="Test",X=20,Y=10,W=20,D=10,Frontage=new Parcel{X=20,Y=20,W=20,D=4}});
   p.Routes.Add(new PlanRoute{Use="main",Width=8,Points=new List<Point>{new Point(0,0),new Point(0,5)}});
   p.Routes.Add(new PlanRoute{Use="aisle",Width=4,Points=new List<Point>{new Point(20,22),new Point(40,22)}});
+  var evidence=new List<Dictionary<string,int>>();
   var details=new List<string>();
-  if(FrontageNetwork.Missing(p,new[]{asset},4,0,details)!=1||!details.Single().Contains("reason=disconnected-from-entrance"))throw new Exception("Disconnected frontage reason missing");
+  if(FrontageNetwork.Missing(p,new[]{asset},4,0,details,evidence:evidence)!=1||!details.Single().Contains("reason=disconnected-from-entrance"))throw new Exception("Disconnected frontage reason missing");
+  if(evidence.Single()["reason"]!=13||evidence[0]["widthCm"]!=2000)throw new Exception("numeric disconnect evidence");evidence.Clear();
   p.Routes.Add(new PlanRoute{Use="aisle",Width=4,Points=new List<Point>{new Point(0,5),new Point(0,22),new Point(20,22)}});
-  details.Clear();if(FrontageNetwork.Missing(p,new[]{asset},4,0,details)!=0||details.Count!=0)throw new Exception("Connected frontage incorrectly rejected");
+  details.Clear();if(FrontageNetwork.Missing(p,new[]{asset},4,0,details,evidence:evidence)!=0||details.Count!=0)throw new Exception("Connected frontage incorrectly rejected");
+  if(evidence.Count!=0)throw new Exception("stale evidence");
   p.Routes[1].Points[1]=new Point(30,22);details.Clear();
-  if(FrontageNetwork.Missing(p,new[]{asset},4,0,details)!=1||!details.Single().Contains("reason=frontage-coverage"))throw new Exception("Short frontage reason missing");
+  if(FrontageNetwork.Missing(p,new[]{asset},4,0,details,evidence:evidence)!=1||!details.Single().Contains("reason=frontage-coverage"))throw new Exception("Short frontage reason missing");
+  if(evidence.Single()["reason"]!=14||evidence[0]["coverageCm"]>=evidence[0]["widthCm"])throw new Exception("numeric coverage evidence");
   Console.WriteLine("PASS frontage diagnostics distinguish disconnected, connected and short coverage without suppressing rejection");
  }
  internal static void Capture(string directory){
