@@ -104,7 +104,7 @@ internal sealed partial class ResidentialLayout {
   }
   route.Points.Add(corners[corners.Count-1]);return route;
  }
- bool PaintCurvedMain(PlanRoute route){
+ bool PaintCurvedMain(PlanRoute route,Action<int> failure=null){
   if(route==null)return false;
   var cells=new HashSet<int>();double half=route.Width/2;
   // Conservative cell intersection: the real circular ribbon lies entirely
@@ -115,7 +115,9 @@ internal sealed partial class ResidentialLayout {
    for(int y=bottom;y<=top;y++)for(int x=left;x<=right;x++){
     var center=new Point(x0+(x+.5)*cell,y0+(y+.5)*cell);double t=Math.Max(0,Math.Min(1,SiteFrame.Dot(center-a,delta)/length2));
     if((center-a-delta*t).Length>half+cell*.707107)continue;
-    if(x<0||y<0||x>=nx||y>=ny||reserved[x,y]||edgeGreen[x,y]&&map[x,y]!=1&&!EntranceApproach(x,y)||map[x,y]==Outside||map[x,y]==Fixed||map[x,y]==3||map[x,y]==5)return false;
+    // Preserve predicate order and short-circuiting; collect only the first rejected cell.
+    int reason=x<0||y<0||x>=nx||y>=ny?30:reserved[x,y]?31:edgeGreen[x,y]&&map[x,y]!=1&&!EntranceApproach(x,y)?32:map[x,y]==Outside?33:map[x,y]==Fixed?34:map[x,y]==3?35:map[x,y]==5?36:0;
+    if(reason!=0){failure?.Invoke(reason);return false;}
     cells.Add(y*nx+x);
    }
   }
@@ -144,6 +146,11 @@ internal sealed partial class ResidentialLayout {
   for(int i=0;i<=steps;i++){double t=(double)i/steps;route.Points.Add(a+direction*(lead+transition*t)+lateral*(t*t*(3-2*t)));}
   if(lead>.001)route.Points.Add(b);
   return PaintCurvedMain(route);
+ }
+ ArgumentException CurveFailure(int reason,int ordinal,double span){
+  var error=new ArgumentException("CurveFit");
+  error.Data["curveEvidence"]=new Dictionary<string,int>{{"reason",reason},{"ordinal",ordinal},{"roadWidthCm",ManualRoadFailure.Centimetres(o.Road)},{"widthCm",ManualRoadFailure.Centimetres(o.MainCurveRadius)},{"lengthCm",ManualRoadFailure.Centimetres(span)},{"flags",o.MainRoadCornerMode},{"connected",entranceTips.Count}};
+  return error;
  }
  void ConnectMainEntrances(int source,int target){
   var a=entranceTips[source];var b=entranceTips[target];var u=entranceDirections[source];var v=entranceDirections[target];
@@ -178,7 +185,7 @@ internal sealed partial class ResidentialLayout {
   // Distinguish no vehicular corridor from a corridor too tight for the fillets.
   if(o.MainRoadCornerMode==0){ConnectAngularMain(a,b);return;}
   tx=X(b.X);ty=Y(b.Y);if(FindRoute(a,(x,y)=>x==tx&&y==ty,o.Road)==null)throw new ArgumentException("DisconnectedEntrance");
-  throw new ArgumentException("CurveFit");
+  throw CurveFailure(40,source,(b-a).Length);
  }
  void ConnectAngularMain(Point a,Point b){
   int tx=X(b.X),ty=Y(b.Y);

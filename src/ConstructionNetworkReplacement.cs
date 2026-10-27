@@ -72,6 +72,7 @@ public partial class ConstructionTool {
   // Keep connection evidence separate from deletion permission: an anchor alone
   // never authorizes deletion, only a geometrically proved native merge does.
   AddCombinedNetworkRoots(entities,roots,touched);
+  AddRetainedJointRoots(entities,roots,touched);
 
   Trace.Event("construction.deletion.scope","submittedConnections="+submittedConnections.Count+" courses="+submittedCourses.Count+" staged="+staged.Count+" touched="+touched.Count+" roots="+roots.Count);
   // Permit a junction node only if native preview retains a node at that position.
@@ -85,6 +86,30 @@ public partial class ConstructionTool {
    }
   }
   return roots;
+ }
+ // Handle joint-only reduction: no deleted edge Temp exists to seed ExpandMerges.
+ // Require full 3D road preservation and one same-prefab survivor spanning BOTH
+ // original arms. Merely preserving two disconnected halves is insufficient.
+ void AddRetainedJointRoots(NativeArray<Entity> entities,HashSet<Entity> roots,HashSet<Entity> anchors){
+  var survivors=new List<Entity>();
+  foreach(var e in entities){var t=EntityManager.GetComponentData<Temp>(e);
+   if((t.m_Flags&TempFlags.Delete)==0&&EntityManager.HasComponent<Game.Net.Edge>(e)&&EntityManager.HasComponent<Game.Net.Curve>(e)&&EntityManager.HasComponent<PrefabRef>(e))survivors.Add(e);
+  }
+  var coverage=new Dictionary<Entity,bool>();var seen=new HashSet<Entity>();
+  foreach(var e in entities){var t=EntityManager.GetComponentData<Temp>(e);var joint=t.m_Original;
+   if((t.m_Flags&TempFlags.Delete)==0||joint==Entity.Null||roots.Contains(joint)||!seen.Add(joint)||!EntityManager.HasComponent<Game.Net.Node>(joint)||!EntityManager.HasBuffer<Game.Net.ConnectedEdge>(joint))continue;
+   var roads=new HashSet<Entity>();foreach(var link in EntityManager.GetBuffer<Game.Net.ConnectedEdge>(joint,true))if(Live(link.m_Edge))roads.Add(link.m_Edge);
+   if(roads.Count!=2)continue;var pair=new List<Entity>(roads);var a=pair[0];var b=pair[1];
+   bool scoped=anchors.Contains(a)||anchors.Contains(b);if(!scoped)continue;
+   if(!EntityManager.HasComponent<PrefabRef>(a)||!EntityManager.HasComponent<PrefabRef>(b))continue;
+   var prefab=EntityManager.GetComponentData<PrefabRef>(a).m_Prefab;
+   if(EntityManager.GetComponentData<PrefabRef>(b).m_Prefab!=prefab)continue;
+   bool full=true;foreach(var road in pair){if(!coverage.TryGetValue(road,out bool retained)){retained=CoversRoadBySurvivors(road,survivors);coverage[road]=retained;}full&=retained;}
+   if(!full)continue;bool bridged=false;
+   foreach(var survivor in survivors)if(EntityManager.GetComponentData<PrefabRef>(survivor).m_Prefab==prefab&&CoversNeighbourJoint(survivor,a,joint)&&CoversNeighbourJoint(survivor,b,joint)){bridged=true;break;}
+   if(!NetworkReplacementPolicy.RetainedJoint(true,scoped,full,bridged))continue;
+   roots.Add(joint);Trace.Event("construction.deletion.retainedJoint","joint="+joint+" bothRoadsPreserved=true bridged=true");
+  }
  }
  // NodeReductionSystem combines collinear edges: one survivor receives Combine,
  // while its neighbour AND their degree-two joint become Delete|Hidden.

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using ApartmentPlan;
@@ -26,6 +26,14 @@ static class NetworkReplacementTests {
   if(!retainedRoots.Contains(1603281)||!retainedRoots.Contains(199359))throw new Exception("existing survivor without Combine blocked");
   for(int mask=0;mask<8;mask++)if(NetworkReplacementPolicy.RetainedNeighbour((mask&1)!=0,(mask&2)!=0,(mask&4)!=0)!=(mask==7))throw new Exception("retained neighbour protection");
 
+  // A joint-only native reduction has no removed-edge candidate: the old path
+  // leaves it blocked even though both roads survive and a single curve bridges it.
+  var jointOnly=new HashSet<int>();NetworkReplacementPolicy.ExpandMerges(jointOnly,new List<NetworkReplacementPolicy.Merge<int>>());
+  if(jointOnly.Contains(77))throw new Exception("old joint-only reproduction invalid");
+  for(int mask=0;mask<16;mask++)if(NetworkReplacementPolicy.RetainedJoint((mask&1)!=0,(mask&2)!=0,(mask&4)!=0,(mask&8)!=0)!=(mask==15))throw new Exception("joint-only protection predicate");
+  if(NetworkReplacementPolicy.RetainedJoint(true,true,true,true))jointOnly.Add(77);
+  if(!jointOnly.Contains(77))throw new Exception("verified joint-only reduction blocked");
+  Console.WriteLine("PASS joint-only reduction requires degree two, scope, full preservation and a bridging survivor; all 15 incomplete cases blocked.");
   var roots=new HashSet<int>{100,101};var owners=new Dictionary<int,int>();
   for(int i=1;i<=21;i++)owners[i]=100;owners[22]=101;
   owners[30]=200;owners[31]=100;owners[32]=31;owners[40]=41;owners[41]=40;

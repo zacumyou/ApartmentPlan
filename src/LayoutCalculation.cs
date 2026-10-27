@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -74,9 +74,15 @@ public partial class PlanSystem {
   LayoutPending=false;var rejected=layoutRejected;layoutRejected=null;
   if(error!=null){
    failedLayoutStatus=error.Message;
+   if(error.Message=="CurveFit"){
+    CurveEvidence.Clear();
+    if(error.Data["curveEvidence"] is Dictionary<string,int> curve)CurveEvidence.Add(new Dictionary<string,int>(curve));
+    Trace.Event("layout.failure.curve",JsonConvert.SerializeObject(CurveEvidence));
+   }
    if(error.Data["layoutReasons"] is System.Collections.Generic.Dictionary<string,int> reasons)layoutReasons=reasons;
    else layoutReasons=new System.Collections.Generic.Dictionary<string,int>();
    Trace.Event("layout.rejection.reasons",JsonConvert.SerializeObject(layoutReasons));
+   if(error is ArgumentException roadError&&error.Message=="ManualRoadFit")RecordManualRoadFailure(roadError);
    Trace.Failure("layout.rejected",error);rejected?.Invoke();LayoutOutdated=rejected==null;Draft=layoutPrevious;Preview.Clear();if(Draft!=null)RenderDraft();
    if(error is PlanLimitException limit)SetLimit(limit.Status,limit.Current,limit.Maximum);
    else Status=error is ArgumentException?(error.Message.StartsWith("AP.Tower.",StringComparison.Ordinal)?error.Message:error.Message=="ManualRoadFit"?"AP.ManualRoadFit":error.Message=="EntranceFit"||error.Message=="EntranceSpacing"?"AP.EntranceFit":error.Message=="CurveFit"?"AP.CurveFit":error.Message=="DisconnectedEntrance"?"AP.DisconnectedEntrance":error.Message=="ZoneFit"?"AP.ZoneFit":error.Message=="RampFit"?"AP.RampFit":"AP.InvalidBoundary"):"AP.Error";

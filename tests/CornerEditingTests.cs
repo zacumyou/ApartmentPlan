@@ -13,7 +13,7 @@ static class CornerEditingTests {
    Check(p.Routes.Where(r=>r.Use=="main").All(r=>r.CornerRadii.Count==0),"tight site uses angular fallback "+mode);
    Check(p.Parcels.All(r=>Layout.Contains(r,box.Select(p.Local).ToList())),"angular road stays within narrow site "+mode);
   }
-  try{Layout.Generate(box,entries,assets,new LayoutOptions{MainRoadCornerMode=1},null,null);throw new Exception("strict radius unexpectedly fits");}catch(ArgumentException e){Check(e.Message=="CurveFit","strict curve mode reports tight corner");}
+  try{Layout.Generate(box,entries,assets,new LayoutOptions{MainRoadCornerMode=1},null,null);throw new Exception("strict radius unexpectedly fits");}catch(ArgumentException e){Check(e.Message=="CurveFit"&&e.Data["curveEvidence"] is System.Collections.Generic.Dictionary<string,int> evidence&&evidence["reason"]==40&&evidence["connected"]==2&&evidence["flags"]==1&&evidence["roadWidthCm"]>0,"strict curve failure preserves pre-rollback inputs without coordinates");}
   var actual=new[]{new Point(-626.2667,-123.9687),new Point(-538.6446,-157.3504),new Point(-574.1082,-267.7516),new Point(-660.1896,-235.0818)};
   var native=Layout.Generate(actual,new Point(-586.1229,-139.7345),new[]{new Asset{Id="small",Width=16,Depth=16,Height=39,Homes=6}},new LayoutOptions(),null);
   foreach(var pc in native.ParkingConnections)if(!pc.Valid)Console.WriteLine("REPRO "+pc.Failure);

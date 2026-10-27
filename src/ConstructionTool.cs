@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Colossal.Mathematics;
@@ -86,7 +86,7 @@ public partial class ConstructionTool:ToolBaseSystem {
    Status(Valid?(Demolishing?"AP.DemolitionReady":"AP.NativeReady"):"AP.NativeBlocked",detail);
    if(Demolishing&&Valid&&!demolitionPrompted){demolitionPrompted=true;s.Request("nativeConfirmDemolition");}
    if(applyRequested){applyRequested=false;if(!Valid)return deps;if(!Demolishing&&(s.Draft?.Villa==true||s.Draft?.Tower==true)&&villaStage==0&&Plans?.Draft?.VillaExistingRoadsOnly!=true){CaptureOwnership();stagedRoads.AddRange(OwnedEntities);CheckpointRoads();ClearDefinitions();applyMode=ApplyMode.Apply;villaStage=1;frame=0;Valid=false;Status("AP.RoadStageWaiting");return deps;}if(!Demolishing){appliedBuildings.AddRange(buildings);CaptureOwnership();foreach(var building in appliedBuildings)World.GetOrCreateSystemManaged<CompoundGrowableProtection>().Include(building);}ClearDefinitions();applyMode=ApplyMode.Apply;committed=true;frame=0;Valid=false;if(Demolishing){s.NativeAuditAvailable=false;s.Request("nativeScheduleDemolition",demolitionPlan.ToString());Status("AP.DemolitionApplied");s.Sound(PlanSound.Demolish);}else{s.NativeCommitted=true;s.NativeAuditAvailable=true;s.Request("nativeRecordCommit");Status("AP.NativeApplied");s.Sound(PlanSound.Build);}}
-  }catch(Exception error){Metrics["FailureFlags"]=1024;Metrics["Buildings"]=validation?.Buildings.Count??0;forceDemolitionStage=0;if(villaStage==1||villaStage==2)villaStage=4;Valid=false;applyRequested=false;previewRefreshAt=0;ClearDefinitions();applyMode=ApplyMode.Clear;submitted=true;frame=9;Notice=stagedRoads.Count>0?"AP.RoadStagePartial":"AP.Native.Details";Trace.Failure("construction.failed",error);Status("AP.NativeBlocked",error.Message);}
+  }catch(Exception error){RecordExceptionEvidence(error);Metrics["FailureFlags"]=1024;Metrics["Buildings"]=validation?.Buildings.Count??0;forceDemolitionStage=0;if(villaStage==1||villaStage==2)villaStage=4;Valid=false;applyRequested=false;previewRefreshAt=0;ClearDefinitions();applyMode=ApplyMode.Clear;submitted=true;frame=9;Notice=stagedRoads.Count>0?"AP.RoadStagePartial":"AP.Native.Details";Trace.Failure("construction.failed",error);Status("AP.NativeBlocked",error.Message);}
   return deps;
  }
  IEnumerable<int> PreparePreview(PlanSystem s,ValidationResult result){
@@ -167,7 +167,7 @@ public partial class ConstructionTool:ToolBaseSystem {
   // drawing a car lane nearby cannot produce a native parking connection.
   // Resolve generated edges only after the native preview exists; all remain Temp
   // until a single explicit Apply. Recheck after regeneration before validation.
-  var aisle=s.Network("aisle");if(aisle==null)throw new InvalidOperationException("Parking aisle unavailable");
+  var aisle=s.Network("aisle");if(aisle==null)throw DiagnosticException.Parking("Parking aisle unavailable",51);
   var aisleTypes=new[]{aisle,s.Network("aisleWide"),s.Network("parkingOneWay"),s.Network("parkingTwoWay")}.Where(n=>n!=null).GroupBy(n=>n.Entity).ToDictionary(g=>g.Key,g=>g.First().Width);
   parkingChanged=false;temps.CompleteDependency();
   var candidates=new SpatialLookup<ConnectionCandidate>(16);
@@ -184,9 +184,9 @@ public partial class ConstructionTool:ToolBaseSystem {
     if(d>candidate.Width*.5f+Mod.Options.ParkingPavingMargin+2||d>=best||math.dot(point.xz-bay.Item2.xz,bay.Item3.xz)<=0||math.abs(math.dot(math.normalizesafe(MathUtils.Tangent(curve,t).xz),bay.Item3.xz))>.6f)continue;
     best=d;parent=candidate.Entity;
    }
-   if(parent==Entity.Null)throw new InvalidOperationException("Parking bay has no matching native aisle edge");
+   if(parent==Entity.Null)throw DiagnosticException.Parking("Parking bay has no matching native aisle edge",52,i,bayDefinitions.Count);
    if(bay.Item1!=Entity.Null){
-    if(EntityManager.GetComponentData<CreationDefinition>(bay.Item1).m_Attached!=parent)throw new InvalidOperationException("Native parking parent changed during preview; recreate the preview");
+    if(EntityManager.GetComponentData<CreationDefinition>(bay.Item1).m_Attached!=parent)throw DiagnosticException.Parking("Native parking parent changed during preview; recreate the preview",53,i,bayDefinitions.Count);
     continue;
    }
    // Submit each bay only once, with its parent already known. Updating an

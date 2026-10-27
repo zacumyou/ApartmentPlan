@@ -6,6 +6,12 @@ using Unity.Entities;
 namespace ApartmentPlan {
 public partial class ConstructionTool {
  readonly List<Dictionary<string,int>> failureEvidence=new List<Dictionary<string,int>>();int evidenceTotal;
+ void RecordExceptionEvidence(System.Exception error){
+  evidenceTotal++;
+  // Keep the terminal cause even if object samples already filled the cap.
+  if(failureEvidence.Count==24)failureEvidence.RemoveAt(23);
+  failureEvidence.Add(DiagnosticException.Record(error,failureStage));
+ }
  void ClearEvidence(){failureEvidence.Clear();evidenceTotal=0;}
  int EvidenceKind(Entity e){if(!EntityManager.Exists(e))return 0;if(EntityManager.HasComponent<Game.Net.Edge>(e))return 1;if(EntityManager.HasComponent<Game.Net.Node>(e))return 2;if(EntityManager.HasComponent<Game.Buildings.Building>(e))return 3;if(EntityManager.HasComponent<Game.Objects.Tree>(e))return 4;if(EntityManager.HasBuffer<Game.Areas.Node>(e))return 5;return 6;}
  void Evidence(Entity e,int reason,int flags=0){

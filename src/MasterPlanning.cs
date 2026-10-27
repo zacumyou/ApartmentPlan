@@ -202,7 +202,7 @@ internal sealed partial class ResidentialLayout {
     var route=FindRoute(start,(x,y)=>x==tx&&y==ty,o.Road);if(route==null)continue;
     double score=(target-start).Length;if(score>best){chosen=route;best=score;}if(chosen!=null)break;
    }
-   if(chosen!=null&&!TryMainSkeleton(chosen))throw new ArgumentException("CurveFit");
+   if(chosen!=null&&!TryMainSkeleton(chosen))throw CurveFailure(41,0,best);
   }
  }
 }

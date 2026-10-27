@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 namespace ApartmentPlan {
 internal static class NetworkReplacementPolicy {
@@ -21,6 +21,8 @@ internal static class NetworkReplacementPolicy {
    if(!changed)return;
   }
  }
+ // Native reduction may delete only the joint while both edge identities survive.
+ internal static bool RetainedJoint(bool degreeTwo,bool scoped,bool bothRoadsPreserved,bool bridged)=>degreeTwo&&scoped&&bothRoadsPreserved&&bridged;
  internal static bool RetainedNeighbour(bool adjacent,bool samePrefab,bool fullCoverage)=>adjacent&&samePrefab&&fullCoverage;
  // A building is never an incidental road child. Cycles/missing owners fail closed.
  internal static bool Allows<T>(T item,HashSet<T> roots,Func<T,bool> exists,Func<T,bool> building,Func<T,T> owner){

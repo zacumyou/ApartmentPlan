@@ -27,10 +27,13 @@ static class ManualRoadTests {
   var zones=plan.Parcels;for(int i=0;i<zones.Count;i++)for(int j=0;j<i;j++)if(Layout.Overlap(zones[i],zones[j]))throw new Exception("manual road layout overlaps parcels");
   Check(true,"repacked buildings and parking do not overlap roads or other parcels");
   var excluded=new ManualZone{Kind=5,Points=new List<Point>{new Point(120,60),new Point(150,60),new Point(150,100),new Point(120,100)}};
-  try{Layout.Generate(boundary,entrances,assets,options,null,new[]{excluded},roads);throw new Exception("excluded area accepted");}catch(ArgumentException e){Check(e.Message=="ManualRoadFit","road crossing an exclusion is rejected");}
+  try{Layout.Generate(boundary,entrances,assets,options,null,new[]{excluded},roads);throw new Exception("excluded area accepted");}catch(ArgumentException e){Check(e is ManualRoadFailure failure&&e.Message=="ManualRoadFit"&&failure.Evidence["reason"]==31&&failure.Evidence["ordinal"]==0&&failure.Evidence["roadWidthCm"]==1200&&failure.Evidence["edges"]==2,"excluded road retains numeric reason, index, width and batch count");}
   var outside=new[]{new ManualRoad{Points=new List<Point>{new Point(100,80),new Point(219,80)}}};
-  try{Layout.Generate(boundary,entrances,assets,options,null,null,outside);throw new Exception("road width outside accepted");}catch(ArgumentException e){Check(e.Message=="ManualRoadFit","full road width must fit inside the boundary and green margin");}
-  try{new ManualRoad{Points=new List<Point>{new Point(1,1),new Point(double.NaN,2)}}.Sample();throw new Exception("NaN accepted");}catch(ArgumentException){Check(true,"invalid control coordinates rejected");}
+  try{Layout.Generate(boundary,entrances,assets,options,null,null,outside);throw new Exception("road width outside accepted");}catch(ArgumentException e){Check(e is ManualRoadFailure failure&&e.Message=="ManualRoadFit"&&new[]{30,32,33}.Contains(failure.Evidence["reason"]),"full road width rejection identifies boundary or green margin");}
+  try{new ManualRoad{Points=new List<Point>{new Point(1,1),new Point(double.NaN,2)}}.Sample();throw new Exception("NaN accepted");}catch(ManualRoadFailure e){Check(e.Evidence["reason"]==20&&e.Evidence.Values.All(v=>v>=-1),"invalid controls report only bounded numeric evidence");}
+  try{new ManualRoad{Points=new List<Point>{new Point(1,1),new Point(2,1)}}.Sample();throw new Exception("short road accepted");}catch(ManualRoadFailure e){Check(e.Message=="ManualRoadFit"&&e.Evidence["reason"]==21,"short controls retain rejection contract with distinct reason");}
+  var invalidSketch=new RoadSketch();invalidSketch.Add(new Point(0,0));
+  try{invalidSketch.Add(new Point(1,0));throw new Exception("invalid sketch committed");}catch(ManualRoadFailure){Check(invalidSketch.Roads.Count==0&&invalidSketch.Points.Count==1,"failed sketch remains unmodified after evidence capture");}
   var data=new PlanEditData{Boundary=boundary.ToList(),Entrances=entrances.ToList(),Draft=plan,Roads=roads,Ramps=new List<Parcel>{new Parcel{Kind=6,W=8,D=20}}};
   var restored=PlanEditCodec.Decode(PlanEditCodec.Encode(data));
   Check(restored.Roads.Count==2&&restored.Roads[1].Curved&&restored.Roads[1].Points[1].X==190&&restored.Ramps.Count==1,"save codec preserves manual controls and legacy ramps without reinterpreting them");
