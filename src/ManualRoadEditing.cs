@@ -16,9 +16,11 @@ public partial class PlanSystem {
   Trace.Event("road.failure.fit",Newtonsoft.Json.JsonConvert.SerializeObject(ManualRoadEvidence));
  }
  void ClearRoadEdit(){Roads.Clear();RoadDraft.Clear();ManualRoadEvidence.Clear();}
+ internal bool CanFinishRoadAt(Point point)=>RoadDraft.Roads.Count>0&&RoadPoints.Count==1&&(point-RoadPoints[0]).Length<4;
  void ClickRoad(Point point){
   if(NativeCommitted||!Layout.Valid(Boundary))return;
-  int reason=!Layout.Inside(point,Boundary)?24:RoadPoints.Count>0&&(point-RoadPoints.Last()).Length<4?25:0;
+  if(CanFinishRoadAt(point)){FinishRoad();Revision++;return;}
+  int reason=RoadPoints.Count>0&&(point-RoadPoints.Last()).Length<4?25:0;
   if(reason!=0){RecordManualRoadFailure(new ManualRoadFailure(reason,Roads.Count+RoadDraft.Roads.Count,RoadPoints.Count+1,RoadCurved));Status="AP.ManualRoadFit";Revision++;return;}
   if(Roads.Count+RoadDraft.Roads.Count>=PlanLimits.Roads){SetLimit("AP.LimitRoads",Roads.Count+RoadDraft.Roads.Count+1,PlanLimits.Roads);Revision++;return;}
   try{RoadDraft.Add(point);}catch(ArgumentException error){RecordManualRoadFailure(error);Status="AP.ManualRoadFit";Revision++;return;}
@@ -31,7 +33,7 @@ public partial class PlanSystem {
  void FinishRoad(){
   if(LayoutPending||NativeCommitted)return;
   if(RoadPoints.Count>1){Status="AP.RoadIncomplete";return;}
-  if(RoadDraft.Roads.Count==0){RoadPoints.Clear();Mode="preview";Status="AP.Ready";return;}
+  if(RoadDraft.Roads.Count==0){RoadPoints.Clear();Mode="preview";Status=PlanDiagnostics.Status(Draft,Selected.Count>0,Villa,LayoutPending,LayoutOutdated);return;}
   var batch=RoadDraft.Roads.ToArray();var points=RoadPoints.ToArray();
   Roads.AddRange(batch);RoadDraft.Clear();Mode="preview";
   Action reject=()=>{foreach(var road in batch)Roads.Remove(road);RoadDraft.Clear();RoadDraft.Roads.AddRange(batch);RoadDraft.Samples.AddRange(batch.Select(r=>r.Sample()));RoadPoints.AddRange(points);Mode="road";};

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 namespace ApartmentPlan {
 public static class PlanLimits {
- public const int Parcels=4800,TotalShapes=48000,SavedPlans=32,Zones=32,Roads=64;
+ public const int Parcels=4800,TotalShapes=48000,SavedPlans=64,Zones=32,Roads=64;
 }
 public sealed class PlanLimitException:ArgumentException {
  public readonly string Status;public readonly double Current,Maximum;
@@ -42,6 +42,7 @@ public static class BuildingPlacement {
  }
 }
 public sealed class Parcel {
+ public Parcel ReplacementBounds;
  public Point? PlacementForward;public Parcel CompactBounds;public Point[] PlacementOutline;
  public bool InvisibleRoad;public int ParkingEntrySide;public Parcel Frontage;public int ClusterId=-1;public Point? Access;public bool AccessEstimated=true;
  public int Kind; public double X,Y,W,D; public string AssetId=""; public double FloorArea; public int Homes;public int ParkingSpaces;public double ParkingAisleWidth;public bool ParkingAlongX=true;
@@ -49,6 +50,11 @@ public sealed class Parcel {
  public Point[] Corners=>new[]{new Point(X,Y),new Point(X+W,Y),new Point(X+W,Y+D),new Point(X,Y+D)};
 }
 public static class ReplacementRules {
+ public static Point Turn(Point f,int direction)=>Math.Abs(direction)==2?new Point(-f.X,-f.Y):direction>0?new Point(f.Y,-f.X):new Point(-f.Y,f.X);
+ public static Parcel Forced(Parcel old,Asset asset,Point forward){
+  bool sideways=Math.Abs(forward.X)>Math.Abs(forward.Y);double w=sideways?asset.Depth:asset.Width,d=sideways?asset.Width:asset.Depth;
+  return new Parcel{Kind=0,X=old.X+(old.W-w)/2,Y=old.Y+(old.D-d)/2,W=w,D=d,AssetId=asset.Id,Homes=asset.Homes,Frontage=old.Frontage,Access=old.Access,PlacementForward=forward};
+ }
  // Keep the estimated frontage edge and its centre fixed when a lot shrinks.
  public static void KeepFront(Parcel old,Parcel next){
   var f=old.Frontage;if(f==null)return;
@@ -60,6 +66,9 @@ public static class ReplacementRules {
   return pieces.Where(p=>p.W>.0001&&p.D>.0001);
  }
 }
+public static class AssetChoice {
+ public static List<Asset> Shuffle(IList<Asset> source,Random random){var copy=new List<Asset>(source);for(int i=copy.Count-1;i>0;i--){int j=random.Next(i+1);var a=copy[i];copy[i]=copy[j];copy[j]=a;}return copy;}
+}
 public sealed class LayoutOptions {
  public TowerRules TowerRules=new TowerRules();public double TowerTurnWidth=4;
  public bool Tower,TowerFacility,TowerEntrancePaving=true;public int TowerTurnStyle=2;public Asset TowerParking;public string TowerSurface="Tiles Surface 01",TowerEntranceSurface="Pavement Surface 01";
@@ -67,6 +76,8 @@ public sealed class LayoutOptions {
  public List<PlanRoute> VillaExistingRoads=new List<PlanRoute>();public double VillaGap=0,VillaReduction=3,VillaMainSpacing=120,VillaBoundary=2,VillaSetback=0;
  public int VillaRows=2,VillaMaxBuildings=500;
  public List<VillaConnection> VillaConnections=new List<VillaConnection>();
+ internal LayoutFunctionTiming FunctionTiming {get;set;}
+ internal Action<string,long> Timing {get;set;}
  internal System.Threading.CancellationToken Cancellation{get;set;}
  public bool RequireBuildingRoad=true;public int ParkingOrientation=0;public double ParkingEndClearance=3,VehiclePassageWidth=3;
  public double PerimeterPathSpacing=80,FrontParkingCoverage=.2,BoundaryGreenMargin=4,ParkingPavingMargin=1,BuildingStagger=2,MaxAccessLength=40,FrontParkingDistance=40,VerticalPreference=.38,SearchStep=2;
@@ -104,6 +115,7 @@ public sealed class Plan {
  public Dictionary<string,long> LayoutTimings=new Dictionary<string,long>();
  public List<PlanRoute> ConstructionRoutes=new List<PlanRoute>();
  public List<Parcel> MainRoadArea=new List<Parcel>();public List<CourtGroup> Courts=new List<CourtGroup>();public List<PlanRoute> Routes=new List<PlanRoute>();public List<Point> UnreachableAccess=new List<Point>();
+ internal readonly List<Dictionary<string,int>> AccessEvidence=new List<Dictionary<string,int>>();internal int AccessEvidenceTotal;
  public List<ParkingConnection> ParkingConnections=new List<ParkingConnection>();public int ParkingAccessFailures;public int RequiredAccessFailures;public string Diagnostics="";
  public List<Point> Boundary=new List<Point>(); public List<Parcel> Parcels=new List<Parcel>();
  public Point Origin,Right,Forward; public double Area,Far; public int Homes; public bool Limited; public int RequestedParcels,ParcelLimit; public double[] Shortfall=new double[7];

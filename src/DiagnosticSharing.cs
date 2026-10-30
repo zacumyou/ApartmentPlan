@@ -17,6 +17,7 @@ public partial class PlanSystem {
  internal readonly List<Dictionary<string,int>> FrontageEvidence=new List<Dictionary<string,int>>();
  internal List<Dictionary<string,int>> NativeFailureEvidence;
  internal int FrontageMissing;
+ internal readonly List<Dictionary<string,int>> EntranceEvidence=new List<Dictionary<string,int>>();
  internal readonly List<Dictionary<string,int>> CurveEvidence=new List<Dictionary<string,int>>();
  const string ReportEndpoint="https://chosho.mycafe24.com/ap-report/submit.php";
  string diagnosticShareStatus="AP.ShareDiagnostics",pendingReport;
@@ -31,7 +32,12 @@ public partial class PlanSystem {
   if(Status=="AP.FrontageRecalculate")metrics=new Dictionary<string,int>{{"DiagnosticVersion",2},{"FrontageMissing",FrontageMissing}};
   if(Status=="AP.ManualRoadFit")metrics=new Dictionary<string,int>{{"DiagnosticVersion",2},{"EvidenceTotal",ManualRoadEvidence.Count},{"EvidenceOmitted",0}};
   if(Status=="AP.CurveFit")metrics=new Dictionary<string,int>{{"DiagnosticVersion",2},{"EvidenceTotal",CurveEvidence.Count},{"EvidenceOmitted",0}};
-  var evidence=Status=="AP.CurveFit"?CurveEvidence:Status=="AP.ManualRoadFit"?ManualRoadEvidence:Status=="AP.FrontageRecalculate"?FrontageEvidence:Status=="AP.NativeBlocked"?NativeFailureEvidence:null;
+  if(Status=="AP.EntranceFit")metrics=new Dictionary<string,int>{{"DiagnosticVersion",2},{"EvidenceTotal",EntranceEvidence.Count},{"EvidenceOmitted",0}};
+  var evidence=Status=="AP.EntranceFit"?EntranceEvidence:Status=="AP.CurveFit"?CurveEvidence:Status=="AP.ManualRoadFit"?ManualRoadEvidence:Status=="AP.FrontageRecalculate"?FrontageEvidence:Status=="AP.NativeBlocked"?NativeFailureEvidence:null;
+  if(evidence==null&&Status!="AP.NativeBlocked"&&Draft!=null&&(Draft.RequiredAccessFailures>0||Draft.ParkingAccessFailures>0)){
+   evidence=PlanDiagnostics.Evidence(Draft,out int total);
+   metrics=new Dictionary<string,int>{{"DiagnosticVersion",2},{"EvidenceTotal",total},{"EvidenceOmitted",Math.Max(0,total-evidence.Count)}};
+  }
   var counts=new Dictionary<string,int>{
    {"boundaryPoints",Boundary.Count},{"entrances",Entrances.Count},{"selectedAssets",Selected.Count},
    {"buildings",Draft?.Parcels.Count(p=>p.Kind==0)??0},{"parking",Draft?.Parcels.Sum(p=>p.ParkingSpaces)??0},

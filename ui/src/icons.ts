@@ -1,3 +1,5 @@
+import rotateCW from './icons/rotate-cw.svg';
+import rotateCCW from './icons/rotate-ccw.svg';
 import share from './icons/share.svg';
 import barsHorizontal from './icons/bars-horizontal.svg';
 import barsVertical from './icons/bars-vertical.svg';
@@ -55,7 +57,7 @@ import i36 from './icons/lot.svg';
 import i37 from './icons/grid.svg';
 import i38 from './icons/angle.svg';
 import i39 from './icons/guide.svg';
-const glyphs:Record<string,string>={share,barsHorizontal,barsVertical,barsMixed,copy,straight,treeAge0,treeAge1,treeAge2,treeAge3,'sparkle':sparkle,'snap-all':snap0,'snap-road':snap1,'snap-lot':snap2,'snap-building':snap3,'snap-guide':snap4,'curve':curve,'new':i0,'edit':i1,'finish':i2,'entrance':i3,'ramp':i4,'undo':i5,'refresh':i6,'replace':i7,'check':i8,'close':i9,'plus':i10,'minus':i11,'left':i12,'right':i13,'up':i14,'down':i15,'layout':i16,'icons':i17,'info':i18,'warning':i19,'save':i20,'building':i21,'sliders':i22,'chart':i23,'library':i24,'search':i25,'trash':i26,'multiply':i27,'percent':i28,'slash':i29,'degree':i30,'square-metre':i31,'play':i32,'exclude':i33,'park':i34,'road':i35,'lot':i36,'grid':i37,'angle':i38,'guide':i39};
+const glyphs:Record<string,string>={'rotate-cw':rotateCW,'rotate-ccw':rotateCCW,share,barsHorizontal,barsVertical,barsMixed,copy,straight,treeAge0,treeAge1,treeAge2,treeAge3,'sparkle':sparkle,'snap-all':snap0,'snap-road':snap1,'snap-lot':snap2,'snap-building':snap3,'snap-guide':snap4,'curve':curve,'new':i0,'edit':i1,'finish':i2,'entrance':i3,'ramp':i4,'undo':i5,'refresh':i6,'replace':i7,'check':i8,'close':i9,'plus':i10,'minus':i11,'left':i12,'right':i13,'up':i14,'down':i15,'layout':i16,'icons':i17,'info':i18,'warning':i19,'save':i20,'building':i21,'sliders':i22,'chart':i23,'library':i24,'search':i25,'trash':i26,'multiply':i27,'percent':i28,'slash':i29,'degree':i30,'square-metre':i31,'play':i32,'exclude':i33,'park':i34,'road':i35,'lot':i36,'grid':i37,'angle':i38,'guide':i39};
 export default glyphs;
 
 

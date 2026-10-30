@@ -3,13 +3,111 @@ using System.Collections.Generic;
 using System.Linq;
 using ApartmentPlan;
 class Program {
+ static void CheckSilent(bool yes,string label){if(!yes)throw new Exception(label);}
  static void Check(bool yes,string label){if(!yes)throw new Exception(label);Console.WriteLine("PASS "+label);}
  static void Verify(Plan p){var local=p.Boundary.Select(p.Local).ToList();Check(p.Parcels.All(r=>Layout.Contains(r,local)),"whole parcels contained");for(int i=0;i<p.Parcels.Count;i++)for(int j=i+1;j<p.Parcels.Count;j++)if(Layout.Overlap(p.Parcels[i],p.Parcels[j]))throw new Exception("overlap "+i+" "+j);Check(true,"nonoverlapping zones");Check(Math.Abs(p.Parcels.Where(r=>r.Kind==0).Sum(r=>r.FloorArea)/p.Area*100-p.Far)<.001,"FAR denominator and floor area");Check(p.Parcels.Sum(r=>r.Area)<=p.Area+.01,"area conservation");}
  static bool Touches(Parcel a,Parcel b)=>
   ((Math.Abs(a.X+a.W-b.X)<.01||Math.Abs(b.X+b.W-a.X)<.01)&&Math.Min(a.Y+a.D,b.Y+b.D)-Math.Max(a.Y,b.Y)>.01)||
   ((Math.Abs(a.Y+a.D-b.Y)<.01||Math.Abs(b.Y+b.D-a.Y)<.01)&&Math.Min(a.X+a.W,b.X+b.W)-Math.Max(a.X,b.X)>.01);
  public sealed class ReplayInput {public List<Point> Boundary {get;set;} public List<Point> Entrances {get;set;} public List<Asset> Assets {get;set;} public LayoutOptions Options {get;set;} public List<Parcel> Ramps {get;set;} public List<ManualZone> Zones {get;set;} public List<ManualRoad> Roads {get;set;}}
- static void Main(string[] args){if(args.Length>0&&args[0]=="--diagnostic-evidence"){FrontageReportTests.Run();return;}if(args.Length>0&&args[0]=="--road-widths"){
+ static void Main(string[] args){if(args.Length>2&&args[0]=="--issue-replay"){
+ var input=Newtonsoft.Json.JsonConvert.DeserializeObject<ReplayInput>(System.IO.File.ReadAllText(args[1]));
+ var watch=System.Diagnostics.Stopwatch.StartNew();
+ try{var result=Layout.Generate(input.Boundary,input.Entrances,input.Assets,input.Options,input.Ramps,input.Zones,input.Roads);var json=Newtonsoft.Json.JsonConvert.SerializeObject(result);System.IO.File.WriteAllText(args[2],json);Console.WriteLine("ms="+watch.ElapsedMilliseconds+" buildings="+result.Parcels.Count(p=>p.Kind==0)+" hash="+Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(json))));}
+ catch(ArgumentException e){Console.WriteLine("ms="+watch.ElapsedMilliseconds+" error="+e.Message+" evidence="+Newtonsoft.Json.JsonConvert.SerializeObject(e.Data));}
+ return;}
+ if(args.Length>0&&args[0]=="--parking-mask"){
+ var random=new Random(617);int checkedHits=0;
+ for(int t=0;t<120;t++){
+  double cell=t%2==0?2:1.5,x0=-47.3,y0=-91.1,extent=40,gap=12;
+  var rows=new List<Parcel>();for(int n=0;n<t%7;n++)rows.Add(new Parcel{X=x0-30+random.NextDouble()*200,Y=y0-30+random.NextDouble()*180,W=1+random.NextDouble()*45,D=1+random.NextDouble()*20});
+  var mask=ParkingCandidateMask.Build(rows,80,70,x0,y0,cell,extent,gap);
+  for(int y=0;y<70;y++)for(int x=0;x<80;x++)foreach(bool rotate in new[]{false,true}){
+   var area=new Parcel{X=x0+x*cell,Y=y0+y*cell,W=rotate?18:40,D=rotate?40:18};
+   if(rows.Any(r=>Layout.Overlap(r,area,gap))){checkedHits++;if(!mask[x,y])throw new Exception("Candidate mask lost an exact-overlap candidate");}
+  }
+ }
+ Console.WriteLine("PASS conservative mask / fractional-negative origins / clipped-empty-overlapping rows / rotations: "+checkedHits+" eligible candidates retained");return;}
+if(args.Length>0&&args[0]=="--access-evidence"){
+ var accessPlan=new Plan{RequiredAccessFailures=30,AccessEvidenceTotal=30};for(int i=0;i<24;i++)accessPlan.AccessEvidence.Add(new Dictionary<string,int>{{"reason",86},{"ordinal",i},{"flags",7},{"edges",3},{"connected",500}});
+ var records=PlanDiagnostics.Evidence(accessPlan,out int total);if(total!=31||records.Count!=24||records[0]["reason"]!=80||records[1]["flags"]!=7)throw new Exception("Access evidence cap/count");
+ if(Newtonsoft.Json.JsonConvert.SerializeObject(accessPlan).Contains("AccessEvidence"))throw new Exception("Transient evidence serialized");Console.WriteLine("PASS access aggregate retained / 24 cap / 31 total / transient evidence excluded from saved plan");return;}
+if(args.Length>0&&args[0]=="--verify-timing-package"){
+ using var zip=System.IO.Compression.ZipFile.OpenRead(args[1]);using var stream=zip.GetEntry("ApartmentPlan.dll").Open();using var buffer=new System.IO.MemoryStream();stream.CopyTo(buffer);buffer.Position=0;
+ using var pe=new System.Reflection.PortableExecutable.PEReader(buffer);var md=System.Reflection.Metadata.PEReaderExtensions.GetMetadataReader(pe);bool found=false;
+ foreach(var h in md.GetAssemblyDefinition().GetCustomAttributes()){var attribute=md.GetCustomAttribute(h);var bytes=md.GetBlobBytes(attribute.Value);if(!System.Text.Encoding.UTF8.GetString(bytes).Contains("ApartmentPlan.LocalLayoutTiming"))continue;var blob=md.GetBlobReader(attribute.Value);blob.ReadUInt16();if(blob.ReadSerializedString()!="ApartmentPlan.LocalLayoutTiming")continue;var value=blob.ReadSerializedString();if(value!=args[2])throw new Exception("Wrong timing build: "+value);found=true;Console.WriteLine("PASS packaged assembly LocalLayoutTiming="+value);}
+ if(!found)throw new Exception("Timing build metadata absent");return;
+ }if(args.Length>0&&args[0]=="--manual-connect-timing"){ManualConnectionTimingTests.Run();return;}if(args.Length>0&&args[0]=="--road-node-gaps"){RoadNodeGapTests.Run();return;}if(args.Length>0&&args[0]=="--failure-diagnostics"){
+ var flags=System.Reflection.BindingFlags.NonPublic|System.Reflection.BindingFlags.Instance;
+ var site=new[]{new Point(0,0),new Point(100,0),new Point(100,100),new Point(0,100)};
+ var plan=Layout.Frame(site,new Point(50,0));
+ var solver=System.Activator.CreateInstance(typeof(ResidentialLayout),flags,null,new object[]{plan,new LayoutOptions(),new Asset[0],null},null);
+ var paint=typeof(ResidentialLayout).GetMethod("PaintCurvedMain",flags);
+ Check(!(bool)paint.Invoke(solver,new object[]{null,null,false}),"null rounded candidate remains rejected");
+ var route=new PlanRoute{Width=16,Points=new System.Collections.Generic.List<Point>{new Point(-1000,-1000),new Point(-900,-1000)}};
+ Check(!(bool)paint.Invoke(solver,new object[]{route,null,false}),"outside ribbon remains rejected");
+ var failure=(System.ArgumentException)typeof(ResidentialLayout).GetMethod("CurveFailure",flags).Invoke(solver,new object[]{41,0,125.73});
+ var evidence=(System.Collections.Generic.Dictionary<string,int>)failure.Data["curveEvidence"];
+ Check(evidence["errorCode"]==3&&evidence["edges"]==2,"captures null candidate and grid-bounds rejection across two attempts");
+ Check(plan.Routes.Count==0,"diagnostics do not add rejected routes");return;
+}
+if(args.Length>0&&args[0]=="--flexible"){
+ var polygon=new[]{new Point(0,0),new Point(180,0),new Point(180,240),new Point(0,240)};
+ var flexibleAssets=new[]{new Asset{Id="A",Width=32,Depth=16,Height=40,Homes=50}};
+ var plan=Layout.Generate(polygon,new[]{new Point(90,0)},flexibleAssets,new LayoutOptions{ContinuousFrontage=true,RequireFrontParking=true,MainRoadPedestrian=true,AisleRoadPedestrian=true},null,null);
+ Verify(plan);Check(plan.RequiredAccessFailures==0,"generated buildings retain entrance access");
+ var old=plan.Parcels.First(p=>p.Kind==0);var snapshot=Newtonsoft.Json.JsonConvert.SerializeObject(plan);
+ var f=new Point(0,-1);var half=ReplacementRules.Turn(f,2);Check(half.X==0&&half.Y==1,"180 degree forward reversal");
+ var forced=ReplacementRules.Forced(old,new Asset{Id="FORCED",Width=64,Depth=40,Homes=80},half);
+ Check(Math.Abs(forced.X+forced.W/2-old.X-old.W/2)<.001&&Math.Abs(forced.Y+forced.D/2-old.Y-old.D/2)<.001,"forced oversized candidate preserves chosen centre");
+ Check(snapshot==Newtonsoft.Json.JsonConvert.SerializeObject(plan),"preparing force candidate does not mutate plan");
+ var frontagePlan=new Plan{Right=new Point(1,0),Forward=new Point(0,1),Boundary=polygon.ToList()};
+ var wide=new Asset{Id="wide",Width=64,Depth=24};frontagePlan.Parcels.Add(new Parcel{Kind=0,AssetId="wide",X=58,Y=12,W=64,D=24,PlacementForward=new Point(0,-1)});
+ frontagePlan.Routes.Add(new PlanRoute{Use="main",Width=8,Points=new List<Point>{new Point(80,6),new Point(100,6)}});
+ Check(FrontageNetwork.Missing(frontagePlan,new[]{wide},8,1)==0,"short connected main road serves wide building frontage");
+ frontagePlan.Routes[0].Points=new List<Point>{new Point(0,100),new Point(20,100)};
+ frontagePlan.Routes.Add(new PlanRoute{Use="aisle",Width=8,Points=new List<Point>{new Point(80,6),new Point(100,6)}});
+ Check(FrontageNetwork.Missing(frontagePlan,new[]{wide},8,1)==1,"disconnected nearby road still rejected");
+ System.IO.File.WriteAllText("ApartmentPlan/docs/flexible-0199-before.json",snapshot);
+ plan.Parcels[plan.Parcels.IndexOf(old)]=forced;
+ System.IO.File.WriteAllText("ApartmentPlan/docs/flexible-0199-after.json",Newtonsoft.Json.JsonConvert.SerializeObject(plan));
+ var road=new ManualRoad{Curved=true,Points=new List<Point>{new Point(0,0),new Point(20,20),new Point(40,0)}};
+ var cached=road.OverlaySamples();Check(ReferenceEquals(cached,road.OverlaySamples()),"unchanged overlay curve reuses samples");road.Points[1]=new Point(20,30);Check(!ReferenceEquals(cached,road.OverlaySamples()),"changed controls invalidate overlay cache");return;
+ }if(args.Length>0&&args[0]=="--reflow"){
+ var plan=new Plan{Right=new Point(1,0),Forward=new Point(0,1),Boundary=new List<Point>{new Point(0,0),new Point(160,0),new Point(160,160),new Point(0,160)}};
+ plan.Parcels.Add(new Parcel{Kind=0,X=50,Y=70,W=24,D=20,AssetId="old"});
+ plan.Parcels.AddRange(ReplacementRules.Vacated(new Parcel{X=0,Y=0,W=160,D=160},plan.Parcels[0]).Select(p=>{p.Kind=4;return p;}));
+ plan.Routes.Add(new PlanRoute{Use="main",Width=8,Points=new List<Point>{new Point(0,20),new Point(160,20)}});
+ var asset=new Asset{Id="large",Width=64,Depth=24,Height=40,Homes=50};
+ Check(BuildingReflow.Try(plan,0,asset,8,8,24,out var built),"larger asset replans into idle land with access road");
+ Check(built.AssetId=="large"&&plan.Routes.Count==3,"chosen asset and connecting roads retained");
+ for(int i=0;i<plan.Parcels.Count;i++)for(int j=0;j<i;j++)CheckSilent(!Layout.Overlap(plan.Parcels[i],plan.Parcels[j]),"reflow parcel overlap");
+ Check(plan.Parcels.All(p=>Layout.Contains(p,plan.Boundary)),"reflow remains inside boundary");
+ var before=Newtonsoft.Json.JsonConvert.SerializeObject(plan);Check(!BuildingReflow.Try(plan,plan.Parcels.IndexOf(built),new Asset{Id="impossible",Width=500,Depth=500},8,8,24,out _),"impossible reflow rejected");Check(before==Newtonsoft.Json.JsonConvert.SerializeObject(plan),"failed reflow leaves plan unchanged");
+ System.IO.File.WriteAllText("ApartmentPlan/docs/reflow-0196.json",Newtonsoft.Json.JsonConvert.SerializeObject(plan));
+ var polygon=new[]{new Point(0,0),new Point(180,0),new Point(180,240),new Point(0,240)};
+ var manual=new ManualRoad{Points=new List<Point>{new Point(-30,100),new Point(210,100)}};
+ var generated=Layout.Generate(polygon,new[]{new Point(90,0)},new[]{new Asset{Id="A",Width=32,Depth=16,Height=40,Homes=50}},new LayoutOptions{ContinuousFrontage=true,MainRoadPedestrian=true,AisleRoadPedestrian=true},null,new[]{new ManualZone{Kind=5,Points=new List<Point>{new Point(20,80),new Point(60,80),new Point(60,120),new Point(20,120)}}},new[]{manual});
+ Check(generated.Routes.Any(r=>r.Use=="main"&&r.Points.Any(q=>generated.World(q).X<0)&&r.Points.Any(q=>generated.World(q).X>180)),"manual road preserves both exterior endpoints");
+ System.IO.File.WriteAllText("ApartmentPlan/docs/exterior-road-0196.json",Newtonsoft.Json.JsonConvert.SerializeObject(generated));return;}
+if(args.Length>0&&args[0]=="--asset-choice"){
+ var a=new[]{new Asset{Id="A",Width=32,Depth=16,Height=30,Homes=40},new Asset{Id="B",Width=32,Depth=16,Height=45,Homes=60},new Asset{Id="C",Width=32,Depth=16,Height=60,Homes=80}};
+ var random=new Random(19471);var count=new int[3];for(int n=0;n<30000;n++){var order=AssetChoice.Shuffle(a,random);CheckSilent(order.Select(x=>x.Id).Distinct().Count()==3,"permutation");count[Array.IndexOf(a,order[0])]++;}
+ Check(count.All(n=>n>9600&&n<10400),"uniform first-choice distribution "+string.Join(",",count));
+ var polygon=new[]{new Point(0,0),new Point(320,0),new Point(320,360),new Point(0,360)};
+ var options=new LayoutOptions{ContinuousFrontage=true,BuildingPattern=1,MixedDirections=false,RespectTargetFar=false,MainRoadPedestrian=true,AisleRoadPedestrian=true};
+ var plan=Layout.Generate(polygon,new[]{new Point(160,0)},a,options,null,null);
+ Verify(plan);Console.WriteLine("COUNTS "+string.Join(",",plan.Parcels.Where(x=>x.Kind==0).GroupBy(x=>x.AssetId).Select(g=>g.Key+"="+g.Count())));Check(plan.Parcels.Where(x=>x.Kind==0).Select(x=>x.AssetId).Distinct().Count()==3,"all three selected assets placed");
+ var p2=Layout.Generate(polygon,new[]{new Point(160,0)},a,options,null,null);
+ Check(string.Join(",",plan.Parcels.Where(x=>x.Kind==0).Select(x=>x.AssetId))==string.Join(",",p2.Parcels.Where(x=>x.Kind==0).Select(x=>x.AssetId)),"same inputs reproduce same distribution");
+ var forward=new Point(0,1);var cw=ReplacementRules.Turn(forward,1);Check(cw.X==1&&cw.Y==0,"clockwise quarter-turn");var back=ReplacementRules.Turn(cw,-1);Check((back-forward).Length<.001,"counterclockwise inverse");for(int turn=0;turn<4;turn++)forward=ReplacementRules.Turn(forward,1);Check(forward.X==0&&forward.Y==1,"four rotations restore direction");
+ var old=new Parcel{Kind=0,X=0,Y=0,W=48,D=24};var smallerEdit=new Parcel{Kind=0,X=8,Y=4,W=32,D=16,ReplacementBounds=old,PlacementForward=new Point(1,0)};
+ var restored=Newtonsoft.Json.JsonConvert.DeserializeObject<Parcel>(Newtonsoft.Json.JsonConvert.SerializeObject(smallerEdit));Check(restored.ReplacementBounds.W==48&&restored.PlacementForward.Value.X==1,"editing bounds and orientation survive serialization");
+ var plot=plan.Boundary.Select(plan.Local).ToList();double vx=plot.Min(q=>q.X)-10,vy=plot.Min(q=>q.Y)-10,vw=plot.Max(q=>q.X)-vx+10,vh=plot.Max(q=>q.Y)-vy+10;
+ var svg=new System.Text.StringBuilder($"<svg xmlns='http://www.w3.org/2000/svg' width='720' height='820' viewBox='{vx} {vy} {vw} {vh}'><rect x='{vx}' y='{vy}' width='{vw}' height='{vh}' fill='#16262e'/>");
+ foreach(var lot in plan.Parcels){var color=lot.Kind==0?(lot.AssetId=="A"?"#edaa55":lot.AssetId=="B"?"#64bdc4":"#be86da"):lot.Kind==1?"#68757c":lot.Kind==2?"#3e708f":"#345444";svg.Append($"<rect x='{lot.X}' y='{lot.Y}' width='{lot.W}' height='{lot.D}' fill='{color}' stroke='#172329' stroke-width='.3'/>");if(lot.Kind==0)svg.Append($"<text x='{lot.X+lot.W/2}' y='{lot.Y+lot.D/2+2}' text-anchor='middle' font-size='7'>{lot.AssetId}</text>");}
+ svg.Append("</svg>");System.IO.File.WriteAllText("ApartmentPlan/docs/asset-choice-0192.svg",svg.ToString());Console.WriteLine("ACTUAL layout "+string.Join(", ",plan.Parcels.Where(x=>x.Kind==0).GroupBy(x=>x.AssetId).Select(g=>g.Key+"="+g.Count())));return;}
+if(args.Length>0&&args[0]=="--diagnostic-evidence"){FrontageReportTests.Run();return;}if(args.Length>0&&args[0]=="--road-widths"){
  var input=new ReplayInput{Boundary=new List<Point>{new Point(0,0),new Point(160,0),new Point(160,275),new Point(0,325)},Entrances=new List<Point>{new Point(60,0),new Point(120,287.5)},Assets=new List<Asset>{new Asset{Id="Slab 40m",Width=40,Depth=12,Height=45,Homes=80},new Asset{Id="Slab 24m",Width=24,Depth=12,Height=30,Homes=40}},Options=new LayoutOptions{ContinuousFrontage=true,RequireBuildingRoad=true,MainRoadPedestrian=true,AisleRoadPedestrian=true,Road=16,MainCurveRadius=40,BayWidth=2.85,BayDepth=5.97292232,Play=0,Facility=0}};
  foreach(var width in new[]{4d,8d,16d,32d}){
   input.Options.ParkingAisle=width;input.Options.AccessRoad=width;input.Options.WideParkingAisle=0;
@@ -38,12 +136,18 @@ if(args.Length>0&&args[0]=="--road-migration"){
  Check(CompoundRoadPolicy.MigrationTarget(true,"Alley",allowed,new[]{"Alley"})==null,"ordinary road protected");
  Check(CompoundRoadPolicy.MigrationTarget(true,"",allowed,new string[0])==null,"missing record protected");return;}
 if(args.Length>0&&args[0]=="--road-fill"){RoadFillTests.Run();return;}if(args.Length>0&&args[0]=="--tower-replay"){var input=Newtonsoft.Json.JsonConvert.DeserializeObject<ReplayInput>(System.IO.File.ReadAllText(args[1]));var timer=System.Diagnostics.Stopwatch.StartNew();Plan plan;try{plan=Layout.Generate(input.Boundary,input.Entrances,input.Assets,input.Options,input.Ramps,input.Zones,input.Roads);}catch(Exception e){Console.WriteLine("elapsedMs="+timer.ElapsedMilliseconds+" error="+e.Message);return;}Console.WriteLine("elapsedMs="+timer.ElapsedMilliseconds+" "+plan.Diagnostics);System.IO.File.WriteAllText("docs/tower-slow-output-021.json",Newtonsoft.Json.JsonConvert.SerializeObject(plan));return;}
-if(args.Length>0&&args[0]=="--performance"){
+if(args.Length>0&&(args[0]=="--performance"||args[0]=="--performance-timing"||args[0]=="--routing-performance")){
  var sites=new[]{new[]{new Point(0,0),new Point(180,0),new Point(180,340),new Point(0,300)}};
+ if(args[0]=="--routing-performance")sites[0]=new[]{new Point(0,0),new Point(300,0),new Point(300,300),new Point(0,300)};
  for(int run=0;run<3;run++){
  var options=new LayoutOptions{ContinuousFrontage=true,RequireBuildingRoad=true,ParkingAisle=7,AccessRoad=7,ParkingPavingMargin=0,BayWidth=3.7,BayDepth=6.2,ParkingOrientation=1,MainRoadPedestrian=true,AisleRoadPedestrian=true};
+ if(args[0]=="--performance-timing")options.FunctionTiming=new LayoutFunctionTiming();
+ if(args[0]=="--performance-timing")options.Timing=(stage,ms)=>{if(stage.StartsWith("housing."))Console.WriteLine(stage+"="+ms);};
+ if(args[0]=="--routing-performance")options.MaxAccessLength=12;
  long allocated=GC.GetAllocatedBytesForCurrentThread();var watch=System.Diagnostics.Stopwatch.StartNew();
  var result=Layout.Generate(sites[0],new[]{new Point(70,0),new Point(180,240)},new[]{new Asset{Id="Doan",Width=40,Depth=32,Height=111,Homes=144},new Asset{Id="Deep front",Width=24,Depth=40,Height=50,Homes=60}},options,null,null);
+ options.FunctionTiming?.Flush(Console.WriteLine);
+ if(args[0]=="--routing-performance")System.IO.File.WriteAllText("docs/routing-performance-output.json",Newtonsoft.Json.JsonConvert.SerializeObject(result));
  var ms=watch.ElapsedMilliseconds;allocated=GC.GetAllocatedBytesForCurrentThread()-allocated;
  result.LayoutTimings.Clear();var json=Newtonsoft.Json.JsonConvert.SerializeObject(result);var hash=Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(json)));
  Console.WriteLine("run="+run+" ms="+ms+" allocated="+allocated+" hash="+hash+" buildings="+result.Parcels.Count(p=>p.Kind==0));
@@ -128,6 +232,14 @@ if(args.Length>0&&args[0]=="--court-infill"){CourtInfillTests.Run();return;}if(a
   if(args.Length>0&&args[0]=="--layout-worker"){LayoutWorkerTests.Run();return;}
   if(args.Length>0&&args[0]=="--single-entry"){ParkingDecalPreview.SingleEntry(args.Length>1?args[1]:"before");return;}
   if(args.Length>0&&args[0]=="--compound-additions"){CompoundAdditionTests.Run();return;}
+  if(args.Length>0&&args[0]=="--retention"){
+   var ids=Enumerable.Range(1,64).Reverse().ToArray();
+   if(PlanDeletionPolicy.OldestForNewPlan(ids.Take(63),64,x=>x,x=>true).Count!=0)throw new Exception("Below limit evicted");
+   if(!PlanDeletionPolicy.OldestForNewPlan(ids,64,x=>x,x=>x>2).SequenceEqual(new[]{3}))throw new Exception("Oldest eligible not chosen");
+   if(PlanDeletionPolicy.OldestForNewPlan(ids,64,x=>x,x=>false).Count!=0)throw new Exception("Protected plan evicted");
+   if(!PlanDeletionPolicy.OldestForNewPlan(Enumerable.Range(1,66),64,x=>x,x=>x!=1).SequenceEqual(new[]{2,3,4}))throw new Exception("Overflow cleanup incorrect");
+   SetbackTests.Deletion();Console.WriteLine("PASS retention: below limit, oldest eligible, protected-only, overflow; deletion guards");return;
+  }
   if(args.Length>0&&args[0]=="--deletion-policy"){SetbackTests.Deletion();return;}
   if(args.Length>0&&args[0]=="--setbacks"){SetbackTests.Run();return;}
   if(args.Length>0&&args[0]=="--management"){ManagementTests.Run();return;}

@@ -8,6 +8,7 @@ using Unity.Entities;
 using Unity.Mathematics;
 namespace ApartmentPlan {
 public partial class ConstructionTool {
+ readonly Dictionary<Entity,int[]> jointDiagnosticsByEntity=new Dictionary<Entity,int[]>();
  readonly HashSet<Entity> submittedConnections=new HashSet<Entity>();
  struct SubmittedCourse {internal Entity Prefab;internal int Seed;internal Bezier4x3 Curve;}
  readonly List<SubmittedCourse> submittedCourses=new List<SubmittedCourse>();
@@ -34,6 +35,7 @@ public partial class ConstructionTool {
   }
  }
  HashSet<Entity> NetworkReplacementRoots(NativeArray<Entity> entities){
+  jointDiagnosticsByEntity.Clear();
   var touched=new HashSet<Entity>(submittedConnections);
   AddSplitConnections(touched);
   // Stage-one definitions are gone, but the committed road identities remain.
@@ -95,19 +97,27 @@ public partial class ConstructionTool {
   foreach(var e in entities){var t=EntityManager.GetComponentData<Temp>(e);
    if((t.m_Flags&TempFlags.Delete)==0&&EntityManager.HasComponent<Game.Net.Edge>(e)&&EntityManager.HasComponent<Game.Net.Curve>(e)&&EntityManager.HasComponent<PrefabRef>(e))survivors.Add(e);
   }
-  var coverage=new Dictionary<Entity,bool>();var seen=new HashSet<Entity>();
+  var coverage=new Dictionary<Entity,bool>();var seen=new HashSet<Entity>();int jointDiagnostics=0;
   foreach(var e in entities){var t=EntityManager.GetComponentData<Temp>(e);var joint=t.m_Original;
    if((t.m_Flags&TempFlags.Delete)==0||joint==Entity.Null||roots.Contains(joint)||!seen.Add(joint)||!EntityManager.HasComponent<Game.Net.Node>(joint)||!EntityManager.HasBuffer<Game.Net.ConnectedEdge>(joint))continue;
    var roads=new HashSet<Entity>();foreach(var link in EntityManager.GetBuffer<Game.Net.ConnectedEdge>(joint,true))if(Live(link.m_Edge))roads.Add(link.m_Edge);
-   if(roads.Count!=2)continue;var pair=new List<Entity>(roads);var a=pair[0];var b=pair[1];
-   bool scoped=anchors.Contains(a)||anchors.Contains(b);if(!scoped)continue;
+   var diagnostic=new int[]{0,survivors.Count,0};jointDiagnosticsByEntity[joint]=diagnostic;
+   if(roads.Count!=2)continue;diagnostic[0]|=1;var pair=new List<Entity>(roads);var a=pair[0];var b=pair[1];
+   bool direct=anchors.Contains(a)||anchors.Contains(b);
+   bool scoped=NetworkReplacementPolicy.JointScope(direct,roots.Contains(a)||roots.Contains(b));
+   if(direct)diagnostic[0]|=2;if(scoped)diagnostic[0]|=4;
+   if(!scoped){if(jointDiagnostics++<24)Trace.Event("construction.failure.joint.scope","joint="+joint+" direct=false verifiedRoad=false");continue;}
    if(!EntityManager.HasComponent<PrefabRef>(a)||!EntityManager.HasComponent<PrefabRef>(b))continue;
+   diagnostic[0]|=8;
    var prefab=EntityManager.GetComponentData<PrefabRef>(a).m_Prefab;
-   if(EntityManager.GetComponentData<PrefabRef>(b).m_Prefab!=prefab)continue;
+   if(EntityManager.GetComponentData<PrefabRef>(b).m_Prefab!=prefab){if(jointDiagnostics++<24)Trace.Event("construction.failure.joint.prefab","joint="+joint);continue;}
+   diagnostic[0]|=16;
    bool full=true;foreach(var road in pair){if(!coverage.TryGetValue(road,out bool retained)){retained=CoversRoadBySurvivors(road,survivors);coverage[road]=retained;}full&=retained;}
-   if(!full)continue;bool bridged=false;
+   if(coverage[a])diagnostic[0]|=32;if(coverage[b])diagnostic[0]|=64;
+   if(!full&&GroundJointPreserved(a,b,joint,survivors)){roots.Add(joint);continue;}
+   if(!full){if(jointDiagnostics++<24)Trace.Event("construction.failure.joint.coverage","joint="+joint+" direct="+direct+" first="+coverage[a]+" second="+coverage[b]+" survivors="+survivors.Count);continue;}bool bridged=false;
    foreach(var survivor in survivors)if(EntityManager.GetComponentData<PrefabRef>(survivor).m_Prefab==prefab&&CoversNeighbourJoint(survivor,a,joint)&&CoversNeighbourJoint(survivor,b,joint)){bridged=true;break;}
-   if(!NetworkReplacementPolicy.RetainedJoint(true,scoped,full,bridged))continue;
+   if(!NetworkReplacementPolicy.RetainedJoint(true,scoped,full,bridged)){if(jointDiagnostics++<24)Trace.Event("construction.failure.joint.bridge","joint="+joint+" fullCoverage=true");continue;}
    roots.Add(joint);Trace.Event("construction.deletion.retainedJoint","joint="+joint+" bothRoadsPreserved=true bridged=true");
   }
  }
@@ -154,26 +164,13 @@ public partial class ConstructionTool {
  // A connection may split the long neighbour while merging its short end into
  // the removed edge. Require coverage by all surviving pieces, not one piece
  // that cannot possibly contain the whole original neighbour after that split.
- bool CoversRoadBySurvivors(Entity original,List<Entity> survivors){
+ bool CoversRoadBySurvivors(Entity original,List<Entity> survivors,bool groundProjection=false){
   if(!EntityManager.HasComponent<Game.Net.Curve>(original)||!EntityManager.HasComponent<PrefabRef>(original))return false;
   var source=EntityManager.GetComponentData<Game.Net.Curve>(original).m_Bezier;
   var prefab=EntityManager.GetComponentData<PrefabRef>(original).m_Prefab;
-  var intervals=new List<System.Tuple<double,double>>();
-  foreach(var e in survivors){
-   if(EntityManager.GetComponentData<PrefabRef>(e).m_Prefab!=prefab)continue;
-   var curve=EntityManager.GetComponentData<Game.Net.Curve>(e).m_Bezier;
-   float first=1,last=0;bool found=false;
-   // Project only continuous runs lying on the original road. Separate runs do
-   // not bridge an off-road detour, and incomplete replacement remains blocked.
-   int samples=math.clamp((int)math.ceil(MathUtils.Length(curve)/.25f),16,8192);
-   for(int i=0;i<=samples;i++){
-    var q=MathUtils.Position(curve,(float)i/samples);float t;
-    bool on=MathUtils.Distance(source,q,out t)<=.25f;
-    if(on){if(!found){first=last=t;found=true;}else{first=math.min(first,t);last=math.max(last,t);}}
-    if((!on||i==samples)&&found){intervals.Add(System.Tuple.Create((double)first,(double)last));found=false;}
-   }
-  }
-  return NetworkReplacementPolicy.CoversIntervals(intervals,.5/System.Math.Max(1,MathUtils.Length(source)));
+  var curves=new List<Bezier4x3>();
+  foreach(var e in survivors)if(EntityManager.GetComponentData<PrefabRef>(e).m_Prefab==prefab)curves.Add(EntityManager.GetComponentData<Game.Net.Curve>(e).m_Bezier);
+  return RoadCurveCoverage.Covers(source,curves,groundProjection);
  }
 
  bool CoversNeighbourJoint(Entity survivor,Entity neighbour,Entity joint){
@@ -207,3 +204,5 @@ public partial class ConstructionTool {
   e=>EntityManager.HasComponent<Owner>(e)?EntityManager.GetComponentData<Owner>(e).m_Owner:Entity.Null);
 }
 }
+
+

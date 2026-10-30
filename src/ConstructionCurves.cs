@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 namespace ApartmentPlan {
@@ -34,7 +34,7 @@ public static class ConstructionCurves {
   // Keep the graph's shared positions, not independently projected curve positions.
   Point Snap(Point p){var near=nodes.OrderBy(q=>(q-p).Length).FirstOrDefault();return (near-p).Length<.1?near:p;}
   foreach(var course in result){var c=course.Curve;var a=Snap(c.A);var b=Snap(c.D);c.B=c.B+(a-c.A);c.C=c.C+(b-c.D);c.A=a;c.D=b;}
-  result.AddRange(edges.Select(e=>new ConstructionCourse{Use=e.Use,Width=e.Width,Curve=new PlanBezier{A=e.A,B=e.A+(e.B-e.A)*(1.0/3),C=e.A+(e.B-e.A)*(2.0/3),D=e.B}}));if(plan.Villa)SimplifyVillaNodes(result);return WalkRoadClearance.Apply(result,plan.Tower?plan.TowerWalkGap:WalkRoadClearance.Gap);
+  result.AddRange(edges.Select(e=>new ConstructionCourse{Use=e.Use,Width=e.Width,Curve=new PlanBezier{A=e.A,B=e.A+(e.B-e.A)*(1.0/3),C=e.A+(e.B-e.A)*(2.0/3),D=e.B}}));SimplifyVillaNodes(result);return WalkRoadClearance.Apply(result,plan.Tower?plan.TowerWalkGap:WalkRoadClearance.Gap);
  }
  // Merge only degree-two continuation nodes. Junctions and road types stay fixed.
  public static void SimplifyVillaNodes(List<ConstructionCourse> courses){

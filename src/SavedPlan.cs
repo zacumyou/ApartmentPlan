@@ -2,6 +2,12 @@ using Colossal.Serialization.Entities;
 using Unity.Entities;
 using Unity.Mathematics;
 namespace ApartmentPlan {
+// Keeps compound ownership/edit metadata while removing its saved-list entry.
+public struct PlanListState:IComponentData,ISerializable {
+ public int Hidden;
+ public void Serialize<T>(T w) where T:IWriter{w.Write(Hidden);}
+ public void Deserialize<T>(T r) where T:IReader{r.Read(out Hidden);}
+}
 public struct PlanConstructionState:IComponentData,ISerializable {
  public int Applied;
  public void Serialize<T>(T w) where T:IWriter{w.Write(Applied);}

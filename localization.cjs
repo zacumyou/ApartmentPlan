@@ -1,4 +1,19 @@
 const fs=require('fs'),path=require('path');const root=__dirname;const en={},ko={};function add(k,e,v){en[k]=e;ko[k]=v}
+add('AP.ReflowNoSpace','No safe space and connected access road could be found around this building.','주변 유휴부지에서 건물과 연결 도로가 함께 들어갈 자리를 찾지 못했습니다.');
+add('AP.ReflowDone','Building and access road replanned. Check the construction preview.','건물과 연결 도로를 다시 계획했습니다. 실제 건설 미리보기에서 확인하세요.');
+
+add('AP.BuildingEditor','Edit building','개별 동 편집');
+add('AP.RotateCW','Rotate clockwise','시계 방향 회전');
+add('AP.RotateCCW','Rotate counterclockwise','반시계 방향 회전');
+add('AP.RotateHalf','Rotate 180°','180도 회전');
+add('AP.RotationComingSoon','Building rotation support is planned for a future update.','개별 동 회전은 추후 지원 예정입니다.');
+add('AP.ForceBuilding','Force fit','강제 집어 넣기');
+add('AP.ParkingAdvisory','Nearby parking is a planning goal, not a placement requirement.','인근 주차는 배치 필수 조건이 아닌 계획 목표입니다.');
+add('AP.ForcedBuilding','Forced into the plan. Check overlaps and road access in construction preview.','계획도에 강제로 넣었습니다. 실제 건설 미리보기에서 겹침과 도로 연결을 확인하세요.');
+add('AP.RotationFit','The rotated building does not fit its original editing area.','회전한 건물이 원래 편집 영역에 들어가지 않습니다.');
+add('AP.RotationAccess','Rotation would disconnect the building frontage from its road.','회전하면 건물 전면의 도로 연결이 끊깁니다.');
+add('AP.Rotated','Building orientation updated.','건물 방향을 변경했습니다.');
+
 add("AP.Warning.Protected","Red marks show existing objects protected from deletion. Adjust the entrance or layout.","빨간 표시는 삭제 보호로 차단된 기존 시설입니다. 입구나 배치를 조정하세요.");
 add("AP.Warning.Native","Red marks show objects rejected by the game construction check. Orange marks show locations needing inspection, not a confirmed cause.","빨간 표시는 게임 건설 검사에서 거부된 대상입니다. 주황 표시는 확인이 필요한 위치이며 원인 확정을 뜻하지 않습니다.");
 add("AP.Warning.Missing","The building preview could not be created at the orange location. Check nearby roads and objects; the cause is not confirmed.","주황색 위치에 건물 미리보기를 생성하지 못했습니다. 주변 도로와 시설을 확인하세요. 원인은 아직 확정되지 않았습니다.");
@@ -77,7 +92,7 @@ add("AP.Villa.NoConnection","An approved road connection cannot be reached. Revi
 add("AP.LimitParcels","Plan shape limit: requested {current}, maximum {maximum}. Reduce the site size.","단일 계획 표시 한도: 생성 {current}개 / 최대 {maximum}개. 구역 크기를 줄이세요.");
 add("AP.LimitParcelsTrimmed","Plan shape limit: generated {current}, maximum {maximum}. Some grass shapes were omitted.","단일 계획 표시 한도: 생성 {current}개 / 최대 {maximum}개. 일부 잔디 표시를 생략했습니다.");
 add("AP.LimitTotalShapes","Total saved shape limit: {current} including this plan / maximum {maximum}. Remove unused saved plans.","전체 저장 표시 한도: 이번 계획 포함 {current}개 / 최대 {maximum}개. 불필요한 저장 계획을 삭제하세요.");
-add("AP.LimitSavedPlans","Saved plan limit: {current} including this plan / maximum {maximum}.","저장 계획 개수 한도: 이번 계획 포함 {current}개 / 최대 {maximum}개.");
+add("AP.LimitSavedPlans","Saved plan limit: {current} including this plan / maximum {maximum}. No unbuilt plans are available for automatic cleanup.","저장 계획 한도: 이번 계획 포함 {current}개 / 최대 {maximum}개. 자동 정리할 미건설 계획이 없습니다.");
 add("AP.LimitZones","Manual zone limit: {current} including this zone / maximum {maximum}.","수동 구역 개수 한도: 이번 구역 포함 {current}개 / 최대 {maximum}개.");
 add("AP.LimitRoads","Manual road limit: {current} including this road / maximum {maximum}.","수동 도로 개수 한도: 이번 도로 포함 {current}개 / 최대 {maximum}개.");
 add("AP.LimitSiteArea","Site area limit: {current} m² / maximum {maximum} m².","구역 면적 한도: {current}㎡ / 최대 {maximum}㎡.");
@@ -283,7 +298,7 @@ add('AP.DeleteBusyHint','Delete the current plan after calculation, construction
 add('AP.DeleteDraftMessage','Discard this unsaved plan and its edits?','작성 중인 계획도와 편집 내용을 버릴까요?');
 add('AP.Desc.MainParkingSetback','Minimum distance from the main-road edge to buildings and parking bays. Connecting roads may cross.','메인 도로 가장자리에서 건물과 주차칸까지의 최소 거리입니다. 연결도로는 통과할 수 있습니다.');
 add('AP.DeleteDialogTitle','Delete plan','계획도 삭제');
-add('AP.DeleteDialogMessage','Delete this plan? The saved layout and its current edits will be removed. Constructed city objects will remain.','이 계획도를 삭제할까요? 저장된 계획과 편집 내용이 삭제됩니다. 이미 건설된 도시 시설은 남습니다.');
+add('AP.DeleteDialogMessage','Remove this saved plan from the list? Constructed buildings and roads will remain. Compound management records are retained.','이 계획도를 저장 목록에서 삭제할까요? 배치된 건물과 도로는 삭제하지 않으며, 단지 관리 정보는 보존합니다.');
 add('AP.DeleteOwnedPlanHint','Use the plan inspector to demolish the owned complex first.','건설된 단지는 상세 패널의 단지 전체 삭제로 먼저 철거하세요.');
 add("AP.Villa.NoNearbyRoad","No eligible adjacent road at this boundary point. Check road distance and elevation.","이 경계점에서 연결 가능한 인접 도로를 찾지 못했습니다. 도로 거리와 높이를 확인하세요.");
 add("AP.ExistingEntrance","Existing entrance","기존 입구");
@@ -319,7 +334,7 @@ add('AP.RoadPending','Apply or discard the pending road design first.','도로 �
 add('AP.RoadIncomplete','Place the curve endpoint, or undo its control point before applying.','곡선 끝점을 찍거나 조절점을 취소한 뒤 확정하세요.');
 add('AP.RoadStart','Click a road start point. Right-click undoes the last added road.','도로 시작점을 클릭하세요. 우클릭으로 최근 추가 도로를 취소합니다.');
 add('AP.RoadControl','Click a curve control point. Right-click cancels the current point.','곡선 조절점을 클릭하세요. 우클릭으로 현재 점을 취소합니다.');
-add('AP.RoadEnd','Click the end point; continue from there. Enter applies all completed segments.','끝점을 클릭하면 그곳에서 이어 그립니다. Enter로 완성한 도로 전체를 한 번 계산합니다.');
+add('AP.RoadEnd','Continue from the end point. Click near the last end point again or press Enter to finish.','끝점에서 이어 그립니다. 마지막 끝점 부근을 다시 클릭하거나 Enter를 누르면 완료합니다.');
 add('AP.ManualRoadFit','Road must fit inside the site, clear of reserved zones and edge greenery. Use spans of at least 4 m.','도로가 단지 경계·지정 구역·외곽 녹지 여백을 침범합니다. 각 구간은 4m 이상으로 지정하세요.');
 add('AP.RoadNetworkHint','Uses the selected main-road network and its actual width. Apply road design recalculates buildings and parking once for all drawn segments. Construction still requires preview and Apply.','선택한 메인 도로와 실제 폭을 사용합니다. 점을 찍을 때는 미리보기만 표시하고, 도로 설계 확정 시 전체를 한 번 계산합니다. 실제 건설은 미리보기 후 확정해야 합니다.');
 add('AP.Keys','Enter: finish drawing. Right-click: undo the current point, then the last added road.','Enter: 그리기 완료. 우클릭: 현재 입력점 취소, 입력점이 없으면 최근 도로 취소.');
@@ -426,7 +441,7 @@ add('AP.LayoutReason.GateBranch','No gate branch fits','게이트 분기 공간 
 add('AP.LayoutReason.Parallel','Parallel road clearance','평행도로 이격');
 add('AP.LayoutReason.Search','No route found under current rules','현재 조건 내 연결 경로 탐색 실패');
 add('AP.DeleteAllPlans','Delete all plans','계획도 전체 삭제');
-add('AP.DeleteAllPlansMessage','Delete all unbuilt saved plans? Built compounds and their ownership records will be retained.','미건설 저장 계획도를 모두 삭제할까요? 건설된 단지와 소유권 기록은 보존합니다.');
+add('AP.DeleteAllPlansMessage','Remove all saved plans from the list? Constructed buildings and roads will remain. Compound management records are retained.','저장 목록의 계획도를 모두 삭제할까요? 배치된 건물과 도로는 삭제하지 않으며, 단지 관리 정보는 보존합니다.');
 add('AP.Tower.RoutingRetryFit','No road layout met the clearance rules after eight routing orders. Buildings and gates were preserved. Adjust road clearance or the site.','건물과 게이트를 유지하여 도로 순서를 8회 재탐색했으나 이격 조건을 만족하지 못했습니다. 도로 이격 설정이나 구역을 조정하세요.');
 add('AP.Tower.Rule.TurnaroundGap','Turnaround road edge gap (m)','회차도로 가장자리 간격 (m)');
 add('AP.Tower.Rule.WalkParallelGap','Parallel walk edge gap (m)','평행 보도 가장자리 간격 (m)');
@@ -478,8 +493,12 @@ add("AP.DeleteDialogOpen","Close the current confirmation dialog first.","현재
 add("AP.DeleteNoTarget","No plan is selected for deletion.","삭제할 계획도가 선택되지 않았습니다.");
 add('AP.Option.DebugLogging','Detailed debug logging','상세 디버그 로그');
 add('AP.Desc.DebugLogging','Record detailed local events for troubleshooting. Off on every game start. Does not enable automatic uploads.','문제 분석용 상세 이벤트를 로컬에 기록합니다. 게임 시작마다 꺼집니다. 자동 전송은 활성화되지 않습니다.');
+add('AP.RoadFinishAtEnd','Click to finish adding roads.','클릭하면 도로 추가를 완료합니다.');
+add('AP.ExistingEntrance','Existing entrance. Right-click nearby to remove it.','기존 입구입니다. 가까이에서 우클릭하면 이 입구를 삭제합니다.');
 for(const data of [en,ko])for(const key of Object.keys(data))data[key]=data[key].replace(/²/g,"2").replace(/[·•]/g,",").replace(/×/g,"x").replace(/−/g,"-").replace(/±/g,"+/-").replace(/–/g,"-");
 for(const [name,data]of [['en-US',en],['ko-KR',ko]])fs.writeFileSync(path.join(root,'lang',name+'.json'),JSON.stringify(data,null,2));
+
+
 
 
 

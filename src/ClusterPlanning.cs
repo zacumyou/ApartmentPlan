@@ -141,9 +141,9 @@ internal sealed partial class ResidentialLayout {
   foreach(var choices in targets){
    // An access target already on a road's sidewalk needs no extra path footprint.
    if(choices.Any(p=>{int x=X(p.X),y=Y(p.Y);return x>=0&&y>=0&&x<nx&&y<ny&&map[x,y]==1&&walkRoads.Any(r=>PedestrianRoadAccess.Covers(r,p,o));})){targetIndex++;continue;}
-   List<Point> route=null;Point access=choices[0];
-   foreach(var target in choices){route=FindRoute(target,(x,y)=>connected[x,y],o.Walkway,true);if(route!=null){access=target;break;}}
-   if(route==null){if(targetIndex<required)plan.RequiredAccessFailures++;targetIndex++;plan.UnreachableAccess.Add(access);continue;}targetIndex++;
+   List<Point> route=null;Point access=choices[0];int attempts=0,rejections=roots.Count==0?4:0,visited=0;
+   foreach(var target in choices){route=FindRoute(target,(x,y)=>connected[x,y],o.Walkway,true);attempts++;rejections|=lastRouteFailure;visited=(int)Math.Min(int.MaxValue,(long)visited+lastRouteVisited);if(route!=null){access=target;break;}}
+   if(route==null){if(targetIndex<required){plan.RequiredAccessFailures++;plan.AccessEvidenceTotal++;if(plan.AccessEvidence.Count<24)plan.AccessEvidence.Add(new Dictionary<string,int>{{"reason",86},{"ordinal",targetIndex},{"flags",rejections},{"edges",attempts},{"connected",visited}});}targetIndex++;plan.UnreachableAccess.Add(access);continue;}targetIndex++;
    if(route.Count>1)DrawRoute(route,o.Walkway,"pedestrian");foreach(var p in route)connected[X(p.X),Y(p.Y)]=true;
   }
  }

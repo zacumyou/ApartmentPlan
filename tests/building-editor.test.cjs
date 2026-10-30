@@ -1,0 +1,23 @@
+const fs=require('fs'),vm=require('vm'),assert=require('assert'),path=require('path');
+const ts=require('../ui/node_modules/typescript');
+const source=fs.readFileSync(path.join(__dirname,'../ui/src/index.tsx'),'utf8')+'\nexport {Panel,NameLabels};';
+const code=ts.transpileModule(source,{compilerOptions:{jsx:ts.JsxEmit.React,module:ts.ModuleKind.CommonJS,esModuleInterop:true}}).outputText;
+const calls=[],assets=[{Id:'a',Name:'A',Width:48,Depth:32,Homes:10},{Id:'b',Name:'B',Width:96,Depth:24,Homes:20},{Id:'c',Name:'C',Width:32,Depth:24,Homes:10}];
+assets.forEach(a=>Object.assign(a,{Height:40,Footprint:500}));
+let state={open:true,mode:'replace',replacement:'a',selected:['a','b'],snaps:[],networks:[],canSave:true};
+const react={Component:class{},Fragment:'fragment',createElement:(type,props,...children)=>({type,props:props||{},children}),useMemo:f=>f(),useState:v=>[typeof v==='function'?v():v,()=>{}],useRef:v=>({current:v}),useEffect:()=>{}};
+const modules={'react':react,'cs2/api':{bindValue:(group,key)=>key,useValue:key=>key==='state'?JSON.stringify(state):key==='nameLabels'?JSON.stringify([{text:'A\nB',x:.2,y:.3,size:.015,index:4,token:9,editable:true}]):key==='catalog'?'[]':'',trigger:(...args)=>calls.push(args)},'cs2/ui':{Button:'Button',FloatingButton:'FloatingButton',Tooltip:'Tooltip',Scrollable:'Scrollable'},'cs2/l10n':{useLocalization:()=>({translate:(key,fallback)=>fallback||key})},'./network-list':{orderNetworks:x=>x,roadWidthLabel:()=>''},'./trace':{trace:()=>{}},'./panel-dismiss':{PanelDismiss:'PanelDismiss'},'./asset-name':{assetMatches:()=>true},'./use-asset-catalog':{useAssetCatalog:()=>({assets,loading:false})},'./use-panel-placement':{usePanelPlacement:()=>({layout:0,collapsed:false,position:null,shell:{current:null},enter:()=>{},leave:()=>{},focus:()=>{},blur:()=>{},start:()=>{}})}};
+const context={exports:{},require:id=>id in modules?modules[id]:id.endsWith('.json')?require(path.join(__dirname,'../lang/en-US.json')):id.endsWith('.css')?new Proxy({},{get:(_,k)=>k==='__esModule'?false:k}):{}};
+vm.runInNewContext(code,context);
+function all(node){if(!node||typeof node!=='object')return [];return [node,...(node.children||[]).flat(Infinity).flatMap(all)];}
+const tree=all(context.exports.Panel());const dialog=tree.find(n=>n.props.role==='dialog');assert(dialog,'selected building must open even without nested buildingEditor');
+const buttons=all(dialog).filter(n=>n.type==='Button');const choices=buttons.filter(n=>n.props['aria-label']==='A'||n.props['aria-label']==='B'||n.props['aria-label']==='C');assert.equal(choices.length,2,'only selected assets');
+choices[1].props.onSelect();assert.equal(calls.at(-1).slice(2).join('|'),'replaceAsset|b');
+const rotations=buttons.filter(n=>!n.props['aria-label']);assert.equal(rotations.length,3);assert(rotations.every(n=>n.props.disabled&&!n.props.onSelect));
+state={...state,replacement:null};assert(!all(context.exports.Panel()).some(n=>n.props.role==='dialog'));
+assert(!calls.some(c=>c[2]==='rotateBuilding'));
+state={...state,replacement:'a',canForceBuilding:true};
+const force=all(context.exports.Panel()).find(n=>n.type==='Button'&&n.props.className==='forceChip');assert(force);force.props.onSelect();assert.equal(calls.at(-1)[2],'forceBuilding');
+state={...state,canForceBuilding:false};assert(!all(context.exports.Panel()).some(n=>n.props.className==='forceChip'));
+all(context.exports.NameLabels()).find(n=>n.props.role==='button').props.onClick({stopPropagation(){}});assert.equal(calls.at(-1).slice(2).join('|'),'pickLabel|9|4');
+console.log('PASS editor selection, replacement, three disabled rotations without handlers, force chip, dismissal and label token. React fixture, not Gameface.');

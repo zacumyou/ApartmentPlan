@@ -119,6 +119,9 @@ static class ConstructionTests {
   var roads=g.Where(e=>e.Use!="pedestrian").ToList();var visited=new HashSet<int>{0};bool changed=true;while(changed){changed=false;for(int i=0;i<roads.Count;i++)if(!visited.Contains(i)&&visited.Any(j=>new[]{roads[i].A,roads[i].B}.Any(a=>new[]{roads[j].A,roads[j].B}.Any(b=>(a-b).Length<.03)))){visited.Add(i);changed=true;}}
   Check(visited.Count==roads.Count,"all construction road axes share entrance component "+visited.Count+"/"+roads.Count);
   Check(g.Count<1500,"representative native graph within segment budget");
+  var courses=ConstructionCurves.Create(plan).Where(c=>c.Use!="pedestrian").ToList();
+  var reached=new HashSet<int>{0};bool grew=true;while(grew){grew=false;for(int i=0;i<courses.Count;i++)if(!reached.Contains(i)&&reached.Any(j=>new[]{courses[i].Curve.A,courses[i].Curve.D}.Any(a=>new[]{courses[j].Curve.A,courses[j].Curve.D}.Any(b=>(a-b).Length<.001)))){reached.Add(i);grew=true;}}
+  Check(reached.Count==courses.Count,"restored native curves share exact junctions "+reached.Count+"/"+courses.Count);
   Console.WriteLine("Native graph checks only; game generation and traffic require runtime tests.");
  }
 }

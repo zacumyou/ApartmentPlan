@@ -16,3 +16,4 @@ Windows, 게임 내에서 설정한 공식 Modding Toolchain, Node.js 18 이상 
 The required native road assets are distributed separately as AP Invisible Road Pack (Paradox Mods 165049). They are not built by this repository.
 
 The diagnostic server deployment and private configuration are not part of this repository. The consent flow and client payload are available in `src/DiagnosticSharing.cs` and `localization.cjs`.
+For the published 0.1.118 logging configuration, run `./build.ps1 -SkipLayoutTests -PublicRelease`. Normal local builds retain stage timing; public builds disable it. Full layout tests also need their referenced local fixtures, which are not included.

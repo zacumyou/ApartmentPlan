@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <Configurations>Debug;Release</Configurations>
-    <Version>0.1.85</Version>
+    <Version>0.1.118</Version>
     <AssemblyName>ApartmentPlan</AssemblyName>
     <RootNamespace>ApartmentPlan</RootNamespace>
     <AssemblyTitle>APARTMENT PLAN</AssemblyTitle>
@@ -17,8 +17,9 @@
     <MSCORLIBPath>$(CSII_MSCORLIBPATH)</MSCORLIBPath>
     <LocalModsPath>$(MSBuildProjectDirectory)\..\local</LocalModsPath>
   </PropertyGroup>
+  <PropertyGroup Condition="'$(LocalLayoutTiming)' == 'true'"><DefineConstants>$(DefineConstants);AP_LOCAL_TIMING</DefineConstants></PropertyGroup>
   <ItemGroup>
-    <Reference Include="UnityEngine.AudioModule"><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.UI;UnityEngine.UIModule;Unity.TextMeshPro;UnityEngine.TextRenderingModule;UnityEngine.AudioModule"><Private>false</Private></Reference>
     <Reference Include="UnityEngine.ImageConversionModule"><Private>false</Private></Reference>
     <EmbeddedResource Include="..\lang\*.json"><WithCulture>false</WithCulture><LogicalName>ApartmentPlan.lang.%(Filename)%(Extension)</LogicalName></EmbeddedResource>
     <Reference Include="Newtonsoft.Json;System.Runtime.Serialization;System.Net.Http"><Private>false</Private></Reference>
@@ -35,6 +36,8 @@
     <Copy SourceFiles="@(FilesToDeploy)" DestinationFolder="$(DeployDir)" />
   </Target>
 </Project>
+
+
 
 
 

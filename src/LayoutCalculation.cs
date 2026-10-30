@@ -3,6 +3,11 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Newtonsoft.Json;
+#if AP_LOCAL_TIMING
+[assembly: System.Reflection.AssemblyMetadata("ApartmentPlan.LocalLayoutTiming", "true")]
+#else
+[assembly: System.Reflection.AssemblyMetadata("ApartmentPlan.LocalLayoutTiming", "false")]
+#endif
 namespace ApartmentPlan {
 internal sealed class LayoutInput {
  public List<Point> Boundary,Entrances;public List<Asset> Assets;
@@ -58,11 +63,30 @@ public partial class PlanSystem {
   Trace.Event("layout.queued","points="+input.Boundary.Count+" assets="+input.Assets.Count);
   layoutWorker.Submit(token=>{
    input.Options.Cancellation=token;
+#if AP_LOCAL_TIMING
+   input.Options.FunctionTiming=new LayoutFunctionTiming();
+   var timingId=Guid.NewGuid().ToString("N").Substring(0,8);
+   input.Options.Timing=(stage,ms)=>Trace.Event("layout.localTiming", "run="+timingId+" stage="+stage+" ms="+ms,true);
+   input.Options.Timing("start",0);
+   // Local-only fingerprint compares complete inputs without logging coordinates or asset names.
+   using(var digest=System.Security.Cryptography.SHA256.Create()){
+    var fingerprint=BitConverter.ToString(digest.ComputeHash(System.Text.Encoding.UTF8.GetBytes(json))).Replace("-","");
+    Trace.Event("layout.localInput","run="+timingId+" hash="+fingerprint+" points="+input.Boundary.Count+" assets="+input.Assets.Count+" entrances="+input.Entrances.Count+" roads="+(input.Roads?.Count??0)+" zones="+(input.Zones?.Count??0),true);
+   }
+#endif
    // Replay snapshots are opt-in diagnostic files.
    if(Trace.Detailed)try{Directory.CreateDirectory(folder);File.WriteAllText(Path.Combine(folder,"layout-last-input.json"),json);}catch{}
    var watch=System.Diagnostics.Stopwatch.StartNew();
-   var result=Layout.Generate(input.Boundary,input.Entrances,input.Assets,input.Options,input.Ramps,input.Zones,input.Roads);
-   token.ThrowIfCancellationRequested();
+   Plan result;
+   try{result=Layout.Generate(input.Boundary,input.Entrances,input.Assets,input.Options,input.Ramps,input.Zones,input.Roads);token.ThrowIfCancellationRequested();}
+   catch(Exception error){input.Options.Timing?.Invoke(error is OperationCanceledException?"cancelled":"failed",watch.ElapsedMilliseconds);throw;}
+   finally{
+    watch.Stop(); // Exclude aggregate log output from calculation wall time.
+#if AP_LOCAL_TIMING
+    input.Options.FunctionTiming.Flush(line=>Trace.Event("layout.localFunction","run="+timingId+" "+line,true));
+#endif
+   }
+   input.Options.Timing?.Invoke("total",watch.ElapsedMilliseconds);
    if(Trace.Detailed)try{File.WriteAllText(Path.Combine(folder,"layout-last-result.json"),JsonConvert.SerializeObject(new{utc=DateTime.UtcNow,ms=watch.ElapsedMilliseconds,result.LayoutTimings,buildings=result.Parcels.Count(r=>r.Kind==0),parking=result.Parcels.Sum(r=>r.ParkingSpaces),result.Diagnostics,result.ParkingAccessFailures,result.RequiredAccessFailures}));}catch{}
    return result;
   });
@@ -74,6 +98,11 @@ public partial class PlanSystem {
   LayoutPending=false;var rejected=layoutRejected;layoutRejected=null;
   if(error!=null){
    failedLayoutStatus=error.Message;
+   if(error.Message=="EntranceFit"||error.Message=="EntranceSpacing"){
+    EntranceEvidence.Clear();
+    if(error.Data["entranceEvidence"] is Dictionary<string,int> entrance)EntranceEvidence.Add(new Dictionary<string,int>(entrance));
+    Trace.Event("layout.failure.entrance",JsonConvert.SerializeObject(EntranceEvidence));
+   }
    if(error.Message=="CurveFit"){
     CurveEvidence.Clear();
     if(error.Data["curveEvidence"] is Dictionary<string,int> curve)CurveEvidence.Add(new Dictionary<string,int>(curve));
@@ -87,7 +116,7 @@ public partial class PlanSystem {
    if(error is PlanLimitException limit)SetLimit(limit.Status,limit.Current,limit.Maximum);
    else Status=error is ArgumentException?(error.Message.StartsWith("AP.Tower.",StringComparison.Ordinal)?error.Message:error.Message=="ManualRoadFit"?"AP.ManualRoadFit":error.Message=="EntranceFit"||error.Message=="EntranceSpacing"?"AP.EntranceFit":error.Message=="CurveFit"?"AP.CurveFit":error.Message=="DisconnectedEntrance"?"AP.DisconnectedEntrance":error.Message=="ZoneFit"?"AP.ZoneFit":error.Message=="RampFit"?"AP.RampFit":"AP.InvalidBoundary"):"AP.Error";
   }else{
-   failedLayoutInput=null;failedLayoutStatus=null;layoutReasons.Clear();LayoutOutdated=false;Draft=result;RenderDraft();Status=Selected.Count==0?"AP.SelectAssets":Draft.ParkingAccessFailures>0?"AP.ParkingAccessIncomplete":Draft.RequiredAccessFailures>0?(Villa?"AP.Villa.NoConnection":"AP.AccessIncomplete"):!Draft.Parcels.Any(r=>r.Kind==0)?"AP.NoBuildingFit":Draft.VillaPedestrianWarnings>0?"AP.Villa.PedestrianWarning":Draft.VillaRejectedConnections.Count>0?"AP.Villa.RejectedApproach":Draft.Limited?"AP.LimitParcelsTrimmed":Draft.Shortfall.Skip(2).Any(x=>x>1)?"AP.Shortfall":"AP.Ready";
+   failedLayoutInput=null;failedLayoutStatus=null;layoutReasons.Clear();LayoutOutdated=false;Draft=result;RenderDraft();Status=PlanDiagnostics.Status(Draft,Selected.Count>0,Villa);
    if(Status=="AP.LimitParcelsTrimmed")SetLimit(Status,Draft.RequestedParcels,Draft.ParcelLimit);
    if(CompoundEditing)SaveCompoundPending(false);
    Trace.Event("layout.end","timings="+JsonConvert.SerializeObject(Draft.LayoutTimings)+" status="+Status+" buildings="+Draft.Parcels.Count(r=>r.Kind==0));

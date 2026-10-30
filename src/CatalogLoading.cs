@@ -38,7 +38,7 @@ public partial class PlanSystem {
    catalogSlices++;catalogCpuMs+=timer.Elapsed.TotalMilliseconds;catalogMaxSliceMs=Math.Max(catalogMaxSliceMs,timer.Elapsed.TotalMilliseconds);
    if(finished){
     catalogWork.Dispose();catalogWork=null;catalogReady=true;if(catalogBuildingsChanged)CatalogRevision++;Revision++;
-    if(Status=="AP.CatalogLoading")Status=Draft==null?"AP.Draw":"AP.Ready";
+    if(Status=="AP.CatalogLoading")Status=PlanDiagnostics.Status(Draft,Selected.Count>0,Villa,LayoutPending,LayoutOutdated);
     Trace.Event("catalog.end","count="+Assets.Count+" slices="+catalogSlices+" cpuMs="+catalogCpuMs.ToString("F1")+" maxSliceMs="+catalogMaxSliceMs.ToString("F1"));
     if(catalogRetryLayout){catalogRetryLayout=false;Rebuild();}
    }else if(catalogSlices%8==0)Revision++;

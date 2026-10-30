@@ -4,6 +4,7 @@ using System.Linq;
 
 namespace ApartmentPlan {
 internal sealed partial class ResidentialLayout {
+ int curveRejectMask,curveAttempts;
  double CurveScale=>Math.Max(.25,Math.Min(1,o.MainCurveLengthRatio));
  readonly List<Point> entranceDirections=new List<Point>();
  bool TryMainTJunction(int source){
@@ -104,24 +105,27 @@ internal sealed partial class ResidentialLayout {
   }
   route.Points.Add(corners[corners.Count-1]);return route;
  }
- bool PaintCurvedMain(PlanRoute route,Action<int> failure=null){
-  if(route==null)return false;
+ bool PaintCurvedMain(PlanRoute route,Action<int> failure=null,bool manual=false){
+  if(!manual)curveAttempts++;
+  if(route==null){if(!manual)curveRejectMask|=1;return false;}
   var cells=new HashSet<int>();double half=route.Width/2;
   // Conservative cell intersection: the real circular ribbon lies entirely
   // inside these reserved road cells. Test the SAME ribbon used for parking exclusion.
   for(int n=1;n<route.Points.Count;n++){
    var a=route.Points[n-1];var b=route.Points[n];var delta=b-a;double length2=SiteFrame.Dot(delta,delta);if(length2<1e-8)continue;
    int left=X(Math.Min(a.X,b.X)-half-cell),right=X(Math.Max(a.X,b.X)+half+cell),bottom=Y(Math.Min(a.Y,b.Y)-half-cell),top=Y(Math.Max(a.Y,b.Y)+half+cell);
+   if(manual){left=Math.Max(0,left);right=Math.Min(nx-1,right);bottom=Math.Max(0,bottom);top=Math.Min(ny-1,top);}
    for(int y=bottom;y<=top;y++)for(int x=left;x<=right;x++){
     var center=new Point(x0+(x+.5)*cell,y0+(y+.5)*cell);double t=Math.Max(0,Math.Min(1,SiteFrame.Dot(center-a,delta)/length2));
     if((center-a-delta*t).Length>half+cell*.707107)continue;
+    if(manual){if(map[x,y]!=Outside&&map[x,y]!=Fixed)cells.Add(y*nx+x);continue;}
     // Preserve predicate order and short-circuiting; collect only the first rejected cell.
     int reason=x<0||y<0||x>=nx||y>=ny?30:reserved[x,y]?31:edgeGreen[x,y]&&map[x,y]!=1&&!EntranceApproach(x,y)?32:map[x,y]==Outside?33:map[x,y]==Fixed?34:map[x,y]==3?35:map[x,y]==5?36:0;
-    if(reason!=0){failure?.Invoke(reason);return false;}
+    if(reason!=0){curveRejectMask|=1<<(reason-29);failure?.Invoke(reason);return false;}
     cells.Add(y*nx+x);
    }
   }
-  foreach(int n in cells)map[n%nx,n/nx]=1;
+  foreach(int n in cells){map[n%nx,n/nx]=1;if(manual)reserved[n%nx,n/nx]=false;}
   plan.Routes.Add(route);return true;
  }
  bool TryMainSkeleton(IList<Point> skeleton){
@@ -149,7 +153,7 @@ internal sealed partial class ResidentialLayout {
  }
  ArgumentException CurveFailure(int reason,int ordinal,double span){
   var error=new ArgumentException("CurveFit");
-  error.Data["curveEvidence"]=new Dictionary<string,int>{{"reason",reason},{"ordinal",ordinal},{"roadWidthCm",ManualRoadFailure.Centimetres(o.Road)},{"widthCm",ManualRoadFailure.Centimetres(o.MainCurveRadius)},{"lengthCm",ManualRoadFailure.Centimetres(span)},{"flags",o.MainRoadCornerMode},{"connected",entranceTips.Count}};
+  error.Data["curveEvidence"]=new Dictionary<string,int>{{"reason",reason},{"ordinal",ordinal},{"roadWidthCm",ManualRoadFailure.Centimetres(o.Road)},{"widthCm",ManualRoadFailure.Centimetres(o.MainCurveRadius)},{"lengthCm",ManualRoadFailure.Centimetres(span)},{"flags",o.MainRoadCornerMode},{"connected",entranceTips.Count},{"errorCode",curveRejectMask},{"edges",curveAttempts}};
   return error;
  }
  void ConnectMainEntrances(int source,int target){

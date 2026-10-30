@@ -163,3 +163,59 @@
 @media(prefers-reduced-motion:reduce){.loadingStars>img,.panel .roadConfirm{animation:none}}
 
 .calculationNeeded{font-size:11rem;color:#edc990;margin-left:10rem;}
+
+.editorLayer{position:absolute;left:0;top:0;width:100vw;height:100vh;pointer-events:none;z-index:1100}
+.nameLayer{position:absolute;left:0;top:0;width:100vw;height:100vh;pointer-events:none;z-index:40}
+.nameLabel{position:absolute;display:flex;flex-direction:column;align-items:center;transform:translate(-50%,-50%);padding:5rem 8rem;border-radius:6rem;background-color:rgba(22,30,36,.8);color:white;font-family:var(--fontFamily);font-weight:normal;line-height:1.05;white-space:nowrap;pointer-events:none}
+.nameLabel span{display:block;color:white;line-height:1.05}
+.nameLabel[role="button"]{cursor:pointer}
+.nameLabel[role="button"]:hover{background-color:rgba(40,65,75,.9)}
+.panel.buildingEditor{right:auto;max-width:94vw;font-family:var(--fontFamily)}
+.primaryBuild .tool span{font-size:12rem!important}
+.buildingEditor { position:absolute; display:flex; flex-direction:column; font-size:13rem; z-index:1100; width:360rem; max-height:380rem; padding:12rem; background-color:rgba(20,32,39,.97); border:1rem solid rgba(120,208,231,.7); border-radius:8rem; color:#e8f0f2; pointer-events:auto; }
+.editorTitle { display:flex; align-items:center; justify-content:space-between; margin-bottom:8rem; }
+.editorAssets { display:flex; flex-wrap:wrap; max-height:240rem; overflow-y:auto; }
+.editorAssets .asset { width:104rem; margin:3rem; }
+.editorRotation { display:flex; margin-top:8rem; margin-bottom:8rem; }
+.editorRotation button { display:flex; align-items:center; flex:1 1 0; min-width:0; padding:8rem; }
+.editorRotation button+button { margin-left:8rem; }
+.editorStatus { display:flex; align-items:center; flex-wrap:wrap; }
+.buildingEditor .forceChip { border-radius:12rem; margin:6rem 0 6rem 8rem; padding:4rem 9rem; background:rgba(128,88,30,.85); border:1rem solid #e4b96c; color:white; font-size:12rem; flex-shrink:0; }
+
+.buildingEditor *{box-sizing:border-box}
+.buildingEditor button{font:inherit;color:#e3e8ec!important;cursor:pointer;background:rgba(255,255,255,.04);border:1rem solid rgba(190,220,230,.22);border-radius:4rem;min-width:0;line-height:1.35}
+.buildingEditor button:hover{background:rgba(110,190,210,.18)}
+.buildingEditor button span{color:#e3e8ec!important}
+.buildingEditor .selected{background:rgba(75,141,155,.35);border-color:#8ad1df}
+.buildingEditor button:focus-visible{outline:2rem solid #8ad1df}
+.buildingEditor .small{width:30rem;height:30rem;padding:5rem;display:flex;align-items:center;justify-content:center}
+.buildingEditor .asset{display:flex;flex-direction:column;align-items:center;padding:7rem;font-size:12rem}
+.buildingEditor .glyph{width:18rem;height:18rem;flex-shrink:0;margin-right:5rem}
+.buildingEditor .editorTitle{font-size:16rem}
+.buildingEditor .editorRotation button{font-size:12rem;padding:9rem 5rem}
+.buildingEditor [role="status"]{font-size:12rem;line-height:1.5;margin-top:8rem;color:#b8d1db}
+.saveRow{display:flex;width:100%;align-items:stretch}
+.saveRow>.tool{flex-grow:1!important;flex-basis:0!important;width:auto!important;max-width:none!important}
+
+.primaryBuild{display:flex;flex:1 1 0;min-width:0;margin-left:6rem}.primaryBuild>*{width:100%;flex:1 1 0}.primaryBuild .tool{width:100%!important;max-width:none!important;justify-content:center}
+
+/* Equal-height siblings, including icon actions and wrapped translated labels.
+   Keep header/page icons and asset cards at their own intentional sizes. */
+.saveRow{align-items:stretch;min-height:42rem}
+.saveAction{display:flex;align-items:stretch;flex:0 0 36rem;width:36rem;min-width:36rem;margin-right:6rem}
+.saveAction>.save,.saveAction>.deletePlan{flex:1 1 0;width:100%;height:auto;min-height:42rem;margin:0;padding:7rem}
+.saveAction .glyph{width:20rem;height:20rem;margin:0}
+.saveRow .primaryBuild{align-items:stretch;margin:0}
+.saveRow .primaryBuild .tool{height:auto;min-height:42rem;margin:0;padding:7rem 9rem}
+.inspector .tools{align-items:stretch;margin-bottom:6rem}
+.inspector .tools .tool,.inspector .tools .deletePlan{height:auto;min-height:42rem;margin-bottom:0}
+.zoneTools{align-items:stretch}
+.zoneTools>.small{height:auto;min-height:42rem}
+.tools,.tabs,.planTabs,.patternChoices,.treePlacement,.editorRotation{align-items:stretch}
+.editorRotation button{height:auto;min-height:42rem;justify-content:center}
+.switchRow,.assetFilters,.ruleChecks{align-items:stretch}
+
+
+.savedRow { display:flex; flex-direction:row; align-items:stretch; margin-bottom:8rem; }
+.savedRow .disclosure { flex:1; min-width:0; margin:0; }
+.savedRow .deletePlan { flex-shrink:0; margin-left:8rem; height:auto; min-height:44rem; }

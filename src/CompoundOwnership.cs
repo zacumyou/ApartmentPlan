@@ -51,6 +51,7 @@ public partial class PlanSystem {
  }
  void BeginDemolition(){
   var stored=SelectedStored;var owned=OwnedObjects(stored);if(stored==null||owned.Count==0){Status="AP.NoOwnership";return;}
+  Trace.Event("plan.demolition.request","id="+stored.Info.Number+" replacement="+ReplacingCompound(stored.Info.Number));
   RecoverLegacyInvisibleRoads(stored,owned);
   var verified=new HashSet<Entity>();
   if(EntityManager.HasBuffer<PlanBuiltRoad>(stored.Entity))foreach(var road in EntityManager.GetBuffer<PlanBuiltRoad>(stored.Entity,true))verified.Add(road.Entity);
@@ -163,14 +164,15 @@ public partial class ConstructionTool {
   Trace.Event("plan.demolition.preview","id="+demolitionPlan+" definitions="+definitions.Count);
  }
  bool ValidateDemolition(out string detail){
-  int deleted=0,foreign=0,errors=0;var covered=new HashSet<Entity>();temps.CompleteDependency();
+  ClearEvidence();int deleted=0,foreign=0,errors=0;var foreignKinds=new int[7];var covered=new HashSet<Entity>();temps.CompleteDependency();
   using(var entities=temps.ToEntityArray(Allocator.Temp))foreach(var e in entities){
    var t=EntityManager.GetComponentData<Temp>(e);if(EntityManager.HasComponent<Error>(e)){errors++;TraceErrors(e);}
-   if((t.m_Flags&TempFlags.Delete)==0||t.m_Original==Entity.Null)continue;deleted++;covered.Add(t.m_Original);if(!AllowedDeletion(t.m_Original))foreign++;
+   if((t.m_Flags&TempFlags.Delete)==0||t.m_Original==Entity.Null)continue;deleted++;covered.Add(t.m_Original);if(!AllowedDeletion(t.m_Original)){foreign++;foreignKinds[EvidenceKind(t.m_Original)]++;Evidence(t.m_Original,61,(int)t.m_Flags);}
   }
   int missing=demolitionTargets.Count(e=>Live(e)&&!EntityManager.HasComponent<Game.Net.Node>(e)&&!covered.Contains(e));
   m_ErrorQuery.CompleteDependency();Metrics.Clear();Metrics["DeleteObjects"]=deleted;Metrics["ForeignObjects"]=foreign;Metrics["MissingObjects"]=missing;Metrics["Errors"]=errors;
   Notice=foreign>0?"AP.DemolitionForeign":"AP.DemolishHint";detail="delete="+deleted+" foreign="+foreign+" missing="+missing+" errors="+errors;
+  if(foreign>0)detail+=" foreignKinds[edge,node,building,tree,area,other,missing]="+string.Join(",",new[]{foreignKinds[1],foreignKinds[2],foreignKinds[3],foreignKinds[4],foreignKinds[5],foreignKinds[6],foreignKinds[0]});
   return deleted>0&&foreign==0&&missing==0&&errors==0&&m_ErrorQuery.IsEmptyIgnoreFilter;
  }
  // Explicit recovery path: discard native preview (including foreign deletions),
@@ -212,5 +214,6 @@ public partial class ConstructionTool {
  }
 }
 }
+
 
 

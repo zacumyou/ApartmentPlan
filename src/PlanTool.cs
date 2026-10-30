@@ -36,7 +36,7 @@ public partial class PlanTool:ToolBaseSystem {
   if(s.Mode=="fill"){if(secondary){fillPreview.Clear();s.Request("fill");return deps;}UpdateFill(s,hit.m_HitPosition,capturedPress||applyAction.WasPressedThisFrame());return deps;}
   fillPreview.Clear();fillTime=-10;fillRoadTime=-10;
   UpdateHover(s,new Point(hit.m_HitPosition.x,hit.m_HitPosition.z));
-  if(secondary){if(!s.ToggleVillaConnection(new Point(hit.m_HitPosition.x,hit.m_HitPosition.z)))s.Request("undo");DrawOutline(s,null,false);return deps;}
+  if(secondary){if(s.Mode=="entrance"&&!s.Villa&&hoverEntrance>=0)s.Request("removeEntrance",hoverEntrance.ToString());else if(!s.ToggleVillaConnection(new Point(hit.m_HitPosition.x,hit.m_HitPosition.z)))s.Request("undo");DrawOutline(s,null,false);return deps;}
   if(s.Mode=="road"){UpdateRoadDrawing(s,hit.m_HitPosition);return deps;}
   if(s.Mode=="zone"){
    CollectWorld(hit.m_HitPosition);var point=new Point(hit.m_HitPosition.x,hit.m_HitPosition.z);
@@ -46,7 +46,7 @@ public partial class PlanTool:ToolBaseSystem {
    if(valid&&(capturedPress||applyAction.WasPressedThisFrame()))s.Click(WorldPoint(zoneSnap.Position,hit.m_HitPosition.y));DrawOutline(s,zoneSnap,valid);return deps;
   }
   if(s.Mode=="entrance"&&hoverEntrance>=0&&capturedPress){Hint="AP.ExistingEntrance";DrawOutline(s,null,false);return deps;}
-  bool drawing=s.Mode=="boundary"||s.Mode=="edit"||s.Mode=="preview"||s.Mode=="entrance";if(!drawing){Hint="";DrawOutline(s,null,false);if(applyAction.WasPressedThisFrame())s.Click(hit.m_HitPosition);return deps;}
+  bool drawing=s.Mode=="boundary"||s.Mode=="edit"||s.Mode=="preview"||s.Mode=="entrance";if(!drawing){Hint="";DrawOutline(s,null,false);if(capturedPress||applyAction.WasPressedThisFrame())s.Click(hit.m_HitPosition);return deps;}
   CollectWorld(hit.m_HitPosition);var raw=new Point(hit.m_HitPosition.x,hit.m_HitPosition.z);var snap=BoundarySnap.Solve(raw,drag>=0?new List<Point>():s.Boundary,nearby,referenceAxis,Mod.Options.SnapDistance,Mod.Options.CloseDistance,Mod.Options.SnapDirections,Mod.Options.SnapGuides,s.Mode=="boundary"&&drag<0);
   // Read the press position at the input event, before a fast drag has moved
   // the cursor. The terrain raycast can otherwise report only its final point.
@@ -101,7 +101,7 @@ public partial class PlanTool:ToolBaseSystem {
  }
  void UpdateHover(PlanSystem s,Point p){
   for(int i=0;i<s.ZonePoints.Count;i++)if((s.ZonePoints[i]-p).Length<3){hoverZoneVertex=i;break;}
-  for(int i=0;i<s.Entrances.Count;i++)if((s.Entrances[i]-p).Length<5){hoverEntrance=i;break;}
+  double nearestEntrance=5;for(int i=0;i<s.Entrances.Count;i++){double distance=(s.Entrances[i]-p).Length;if(distance<nearestEntrance){nearestEntrance=distance;hoverEntrance=i;}}
   for(int i=0;i<s.Zones.Count;i++)if(Layout.Inside(p,s.Zones[i].Points)){hoverZone=i;break;}
   if(s.Draft==null)return;var local=s.Draft.Local(p);double best=double.MaxValue;
   for(int i=0;i<s.Draft.Parcels.Count;i++){var r=s.Draft.Parcels[i];if(r.Kind==4||r.Kind==8||s.Mode=="replace"&&r.Kind!=0||s.Mode=="ramp"&&r.Kind!=6)continue;
@@ -123,17 +123,14 @@ public partial class PlanTool:ToolBaseSystem {
   }
   for(int i=0;i<s.Entrances.Count;i++)Ring(s.Entrances[i],green,i==hoverEntrance?8:6,i==hoverEntrance);
   if(s.Mode=="road"){
-   foreach(var road in s.Roads){var points=road.Sample();bool active=roadCursor.HasValue&&points.Skip(1).Select((p,i)=>new SnapEdge(points[i],p,1)).Any(e=>(BoundarySnap.Nearest(roadCursor.Value,e)-roadCursor.Value).Length<4);
+   foreach(var road in s.Roads){var points=road.OverlaySamples();bool active=roadCursor.HasValue&&points.Skip(1).Select((p,i)=>new SnapEdge(points[i],p,1)).Any(e=>(BoundarySnap.Nearest(roadCursor.Value,e)-roadCursor.Value).Length<4);
     for(int i=1;i<points.Count;i++)Line(points[i-1],points[i],active?Color.white:blue,active?1.4f:.5f);
     Ring(points[0],blue,active?5:3,active);Ring(points[points.Count-1],blue,active?5:3,active);
    }
    foreach(var points in s.RoadDraft.Samples){
-    for(int i=1;i<points.Count;i++){Line(points[i-1],points[i],new Color(green.r,green.g,green.b,.28f),s.Network("main")?.Width??Mod.Options.RoadWidth);Line(points[i-1],points[i],green,.45f,true);}
     Ring(points[0],green,3);Ring(points[points.Count-1],green,3);
    }
    foreach(var point in s.RoadPoints)Ring(point,green,4,true);
-   var tint=roadGhostValid?green:red;var fill=new Color(tint.r,tint.g,tint.b,.35f);
-   for(int i=1;i<roadGhost.Count;i++){if(!s.RoadCurved||s.RoadPoints.Count>=2)Line(roadGhost[i-1],roadGhost[i],fill,s.Network("main")?.Width??Mod.Options.RoadWidth);Line(roadGhost[i-1],roadGhost[i],tint,.35f,true);}
   }
   for(int z=0;z<s.Zones.Count;z++){var zone=s.Zones[z];for(int i=0;i<zone.Points.Count;i++)Line(zone.Points[i],zone.Points[(i+1)%zone.Points.Count],z==hoverZone?Color.white:zone.Kind==5?new Color(.75f,.65f,.9f,.95f):green,z==hoverZone?1.2f:.5f,z!=hoverZone);}
   if(hoverParcel>=0&&s.Draft!=null&&hoverParcel<s.Draft.Parcels.Count){var corners=s.Draft.Parcels[hoverParcel].Corners;for(int i=0;i<4;i++)Line(s.Draft.World(corners[i]),s.Draft.World(corners[(i+1)%4]),Color.white,1.1f);}
@@ -151,6 +148,8 @@ public partial class PlanTool:ToolBaseSystem {
  }
 }
 }
+
+
 
 
 

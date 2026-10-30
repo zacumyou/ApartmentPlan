@@ -13,12 +13,15 @@ internal sealed partial class ResidentialLayout {
  bool[,] edgeGreen;
  int[,] packingBlocked,roadDistance;bool packingDirty=true;
  bool CandidateRoom(Parcel r,double x,double y){
+  using(var timingScope=LayoutFunctionTiming.Start(o.FunctionTiming,"CandidateRoom")){
   if(packingDirty){packingBlocked=new int[nx+1,ny+1];for(int j=0;j<ny;j++)for(int i=0;i<nx;i++)packingBlocked[i+1,j+1]=((map[i,j]!=Green&&map[i,j]!=1||reserved[i,j]||edgeGreen[i,j])?1:0)+packingBlocked[i,j+1]+packingBlocked[i+1,j]-packingBlocked[i,j];roadDistance=new int[nx,ny];var queue=new List<int>();
    for(int j=0;j<ny;j++)for(int i=0;i<nx;i++){roadDistance[i,j]=map[i,j]==1?0:int.MaxValue;if(map[i,j]==1)queue.Add(j*nx+i);}
    int[] dx={-1,1,0,0},dy={0,0,-1,1};for(int head=0;head<queue.Count;head++){int v=queue[head],i=v%nx,j=v/nx;for(int k=0;k<4;k++){int a=i+dx[k],b=j+dy[k];if(a<0||b<0||a>=nx||b>=ny||roadDistance[a,b]<=roadDistance[i,j]+1)continue;roadDistance[a,b]=roadDistance[i,j]+1;queue.Add(b*nx+a);}}
    packingDirty=false;}
   int left=X(x),bottom=Y(y),c=(int)Math.Ceiling((x+r.W-x0)/cell-1e-7),d=(int)Math.Ceiling((y+r.D-y0)/cell-1e-7);
   return left>=0&&bottom>=0&&c<=nx&&d<=ny&&packingBlocked[c,d]-packingBlocked[left,d]-packingBlocked[c,bottom]+packingBlocked[left,bottom]==0;
+ 
+  }
  }
 
  void ProtectEdge(){
@@ -33,6 +36,7 @@ internal sealed partial class ResidentialLayout {
   }
  }
  Block ParkingCourt(double x,double y,Asset bar,Asset cap,string kind,int lanes,bool mirror,bool rotate,bool crossParking=false,bool wideEntrance=false){
+  using(var timingScope=LayoutFunctionTiming.Start(o.FunctionTiming,"ParkingCourt")){
   if(o.ContinuousFrontage)return ConnectedFrontageCourt(x,y,bar,cap,kind,lanes,mirror,rotate,crossParking,wideEntrance);
   double length=Math.Max(bar.Width,bar.Depth),depth=Math.Min(bar.Width,bar.Depth);
   double cd=Math.Min(cap.Width,cap.Depth),cl=Math.Max(cap.Width,cap.Depth);
@@ -105,8 +109,11 @@ internal sealed partial class ResidentialLayout {
   Func<Point,Point> point=p=>{double u=mirror?width-p.X:p.X;return new Point(x+(rotate?p.Y:u),y+(rotate?u:p.Y));};
   Action<Parcel> transform=p=>{double u=mirror?width-p.X-p.W:p.X,v=p.Y,w=p.W,h=p.D;p.X=x+(rotate?v:u);p.Y=y+(rotate?u:v);p.W=rotate?h:w;p.D=rotate?w:h;if(rotate)p.ParkingAlongX=!p.ParkingAlongX;};
   b.Gate=point(b.Gate);foreach(var p in b.Pieces.Where(p=>p.Kind==0)){p.Access=point(p.Access.Value);transform(p.Frontage);}foreach(var p in b.Pieces)transform(p);transform(b.Bounds);return b;
+ 
+  }
  }
  bool CommitParkingCourt(Block b,string kind){
+  using(var timingScope=LayoutFunctionTiming.Start(o.FunctionTiming,"CommitParkingCourt")){
   if(b!=null&&o.RequireBuildingRoad&&!EnsureCourtFrontage(b))return false;
   if(b==null||roadDistance!=null&&roadDistance[X(b.Gate.X),Y(b.Gate.Y)]*cell>o.MaxAccessLength||!Fits(b))return false;
   if(o.PedestrianNetwork)OpenCourtAccess(b);
@@ -115,12 +122,13 @@ internal sealed partial class ResidentialLayout {
   if(exact.Count(p=>p.Kind==0)+bars.Count>o.MaxBuildings||bays.Any(p=>!ClearOfMain(p)))return false;
   for(int i=0;i<bars.Count;i++){
    if(exact.Any(p=>p.Kind==0&&!FrontageRules.Spaced(bars[i],p,o.ParallelGap,o.Gap))||bars.Take(i).Any(p=>!FrontageRules.Spaced(bars[i],p,o.ParallelGap,o.Gap)))return false;
-   if(o.RequireFrontParking&&!ParkingFrontRules.Served(bars[i],bays,o.FrontParkingDistance,o.MinFrontParkingSpaces,o.FrontParkingCoverage))return false;
   }
   if(b.Pieces.Where(p=>p.Kind==0||p.Kind==2).Any(p=>b.Pieces.Any(q=>!ReferenceEquals(p,q)&&Layout.Overlap(p,q))))return false;
   if(!Place(b))return false;packingDirty=true;
   var c=new CourtGroup{Id=plan.Courts.Count,Pattern=kind,Bounds=b.Bounds,Gate=b.Gate,Buildings=bars,Parking=bays,Capacity=bays.Sum(p=>p.ParkingSpaces)};
   foreach(var p in bars){p.ClusterId=c.Id;c.AccessPoints.Add(p.Access.Value);}plan.Courts.Add(c);return true;
+ 
+  }
  }
  void OpenCourtAccess(Block block){
   // Reserve only a crossing at a real prefab entrance. A continuous frontage
@@ -181,10 +189,10 @@ internal sealed partial class ResidentialLayout {
   int stride=Math.Max(1,(int)Math.Ceiling(o.SearchStep/cell));
   for(int y=1;y<ny-1&&!Full;y+=stride)for(int x=1;x<nx-1&&!Full;x+=stride){
    if(map[x,y]!=Green)continue;bool placed=false;
-   foreach(var a in assets.OrderByDescending(a=>a.Width*a.Depth))foreach(bool rotate in new[]{false,true}){
+   foreach(var a in AssetChoice.Shuffle(assets,assetRandom))foreach(bool rotate in new[]{false,true}){
     if(placed)break;if(rotate&&!o.MixedDirections&&o.BuildingPattern==0)continue;
     double l=Math.Max(a.Width,a.Depth),d=Math.Min(a.Width,a.Depth);var p=new Parcel{Kind=0,X=x0+x*cell,Y=y0+y*cell,W=rotate?d:l,D=rotate?l:d,AssetId=a.Id,Homes=a.Homes};
-    if(!BarOrientationAllowed(p)||!Free(p)||!ClearOfMain(p)||exact.Any(q=>q.Kind==0&&!FrontageRules.Spaced(p,q,o.ParallelGap,o.Gap))||o.RequireFrontParking&&!ParkingFrontRules.Served(p,exact,o.FrontParkingDistance,o.MinFrontParkingSpaces))continue;
+    if(!BarOrientationAllowed(p)||!Free(p)||!ClearOfMain(p)||exact.Any(q=>q.Kind==0&&!FrontageRules.Spaced(p,q,o.ParallelGap,o.Gap)))continue;
     p.FloorArea=Math.Min(a.Width*a.Depth,a.Footprint>0?a.Footprint:a.Width*a.Depth*o.FootprintRatio)*Math.Max(1,Math.Floor(a.Height/o.FloorHeight));
     if(o.RespectTargetFar&&floors+p.FloorArea>plan.Area*o.TargetFar/100+.001)continue;
     Paint(p,Fixed);exact.Add(p);floors+=p.FloorArea;plan.Homes+=p.Homes;modules++;placed=true;
@@ -194,22 +202,23 @@ internal sealed partial class ResidentialLayout {
  void ParkingCourtHousing(){
   if(assets.Count==0)return;
   var shapes=new Dictionary<(string,Asset,Asset,int,int,bool,bool,bool),Parcel>();
-  var orderedAssets=assets.OrderByDescending(a=>Math.Max(a.Width,a.Depth)).ToArray();
-  var cap=assets.OrderBy(a=>Math.Max(a.Width,a.Depth)).First();
+  var orderedAssets=assets;
   var crossOptions=o.ParkingOrientation==2?new[]{true,false}:new[]{false,true};
   var entranceOptions=o.ContinuousFrontage&&o.WideParkingAisle>o.ParkingAisle?new[]{true,false}:new[]{false};
   foreach(var kind in new[]{"ring","u","pair","single"}){
    if(o.BuildingPattern!=0&&(kind=="ring"||kind=="u"))continue;
    if(kind=="ring"&&(!o.AllowRingCourts||!o.MixedDirections)||kind=="u"&&(!o.AllowOpenCourts||!o.MixedDirections)||kind=="pair"&&!o.AllowParallelPairs||kind=="single"&&!o.EdgeInfill)continue;
+   var housingTimer=o.Timing!=null?System.Diagnostics.Stopwatch.StartNew():null;
    int stride=Math.Max(1,(int)Math.Ceiling(o.SearchStep/cell));
    for(int iy=1;iy<ny-1&&!Full;iy+=stride)for(int ix=1;ix<nx-1&&!Full;ix+=stride){
     o.Cancellation.ThrowIfCancellationRequested();
     if(kind=="ring"&&plan.Courts.Count(c=>c.Pattern=="ring")>=o.MaxRingCourts)break;
     if(map[ix,iy]!=Green||edgeGreen[ix,iy])continue;bool placed=false;
     bool preferVertical=(o.MixedDirections||o.BuildingPattern==3)&&exact.Count(p=>p.Kind==0&&p.D>p.W)<exact.Count(p=>p.Kind==0)*o.VerticalPreference;
+    foreach(var a in AssetChoice.Shuffle(orderedAssets,assetRandom)){
+    var cap=assets[assetRandom.Next(assets.Count)];
     foreach(bool rotation in new[]{preferVertical,!preferVertical}){
      if(rotation&&!o.MixedDirections&&o.BuildingPattern==0)continue;
-     foreach(var a in orderedAssets){
       if(o.BuildingPattern==1&&(rotation?a.Depth:a.Width)<(rotation?a.Width:a.Depth)-.01||o.BuildingPattern==2&&(rotation?a.Width:a.Depth)<(rotation?a.Depth:a.Width)-.01)continue;
       if(placed)break;
       int lanes=o.WideSlabParking&&kind!="single"?Math.Min(o.MaxParkingAisles,Math.Max(1,(int)Math.Ceiling(a.Homes*2*o.ParkingPerHome*o.SurfaceParkingShare/(Math.Max(a.Width,a.Depth)/o.BayWidth*2)))):1;
@@ -229,10 +238,13 @@ internal sealed partial class ResidentialLayout {
      if(placed)break;
     }
    }
+   if(housingTimer!=null)o.Timing("housing."+kind,housingTimer.ElapsedMilliseconds);
   }
+  var infillTimer=o.Timing!=null?System.Diagnostics.Stopwatch.StartNew():null;
   // Disabling the rule explicitly allows unserved residual bars.
   if(!o.ContinuousFrontage&&!o.RequireBuildingRoad&&o.EdgeInfill)UnfrontedInfill();
-  else if(!o.RequireFrontParking&&o.EdgeInfill)FrontageHousing(false);
+  else if(o.EdgeInfill)FrontageHousing(false);
+  if(infillTimer!=null)o.Timing("housing.infill",infillTimer.ElapsedMilliseconds);
  }
 }
 }

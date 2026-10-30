@@ -7,6 +7,16 @@ using Newtonsoft.Json.Linq;
 using ApartmentPlan;
 static class FrontageReportTests {
  internal static void Run(){
+  var failed=new Plan{RequiredAccessFailures=3,ParkingAccessFailures=25};
+  failed.Parcels.Add(new Parcel{Kind=0});
+  for(int n=0;n<25;n++)failed.ParkingConnections.Add(new ParkingConnection{Failure="No full-width aisle with end clearance",Bay=new Parcel{W=25,D=5,ParkingSpaces=10}});
+  if(PlanDiagnostics.Status(failed,true,false)!="AP.ParkingAccessIncomplete"||PlanDiagnostics.Status(failed,true,false,false,true)!="AP.CalculationNeeded")throw new Exception("Edit exit hid pending/failed plan");
+  var info=PlanDiagnostics.Evidence(failed,out int total);
+  if(total!=26||info.Count!=24||info[0]["reason"]!=80||info[1]["reason"]!=83||info[1]["widthCm"]!=2500)throw new Exception("Failed plan evidence cap/count");
+  failed.ParkingAccessFailures=0;if(PlanDiagnostics.Status(failed,true,false)!="AP.AccessIncomplete")throw new Exception("Access failure hidden");
+  failed.RequiredAccessFailures=0;if(PlanDiagnostics.Status(failed,true,false)!="AP.Ready")throw new Exception("Valid plan rejected");
+  Console.WriteLine("PASS edit exit retains failures/outdated state; bounded numeric plan evidence counts omitted records.");
+
   var p=new Plan{Right=new Point(1,0),Forward=new Point(0,1),Boundary=new List<Point>{new Point(-10,-10),new Point(100,-10),new Point(100,100),new Point(-10,100)}};
   var asset=new Asset{Id="Test",Width=20,Depth=10};
   p.Parcels.Add(new Parcel{Kind=0,AssetId="Test",X=20,Y=10,W=20,D=10,Frontage=new Parcel{X=20,Y=20,W=20,D=4}});

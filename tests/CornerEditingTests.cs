@@ -4,6 +4,13 @@ using ApartmentPlan;
 static class CornerEditingTests {
  static void Check(bool ok,string message){if(!ok)throw new Exception(message);Console.WriteLine("PASS "+message);}
  public static void Run(){
+  var narrow=new[]{new Point(0,0),new Point(4,0),new Point(4,60),new Point(0,60)};
+  try{Layout.Generate(narrow,new[]{new Point(2,0)},Array.Empty<Asset>(),new LayoutOptions{Road=8},null,null);throw new Exception("narrow entrance accepted");}
+  catch(ArgumentException e){var d=e.Data["entranceEvidence"] as System.Collections.Generic.Dictionary<string,int>;Check(e.Message=="EntranceFit"&&d!=null&&d["reason"]==60&&d["connected"]==1&&d["roadWidthCm"]==800&&d["edges"]>0,"failed first entrance preserves attempt count and required width before rollback");}
+  var wide=new[]{new Point(0,0),new Point(100,0),new Point(100,100),new Point(0,100)};
+  try{Layout.Generate(wide,new[]{new Point(40,0),new Point(48,0)},Array.Empty<Asset>(),new LayoutOptions{Road=8},null,null);throw new Exception("overlapping entrance accepted");}
+  catch(ArgumentException e){var d=e.Data["entranceEvidence"] as System.Collections.Generic.Dictionary<string,int>;Check(e.Message=="EntranceSpacing"&&d!=null&&d["reason"]==61&&d["connected"]==2,"spacing rejection differs from footprint fit without moving entrances");}
+
   var box=new[]{new Point(0,0),new Point(32,0),new Point(32,60),new Point(0,60)};
   var entries=new[]{new Point(0,15),new Point(32,45)};
   var assets=new[]{new Asset{Id="A",Width=16,Depth=8,Height=20,Homes=10}};

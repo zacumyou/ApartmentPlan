@@ -34,12 +34,16 @@ internal sealed partial class ResidentialLayout {
   for(int y=0;y<ny;y++)for(int x=0;x<nx;){if(map[x,y]!=1){x++;continue;}int begin=x++;while(x<nx&&map[x,y]==1)x++;plan.MainRoadArea.Add(Rect(begin,y,x-begin,1,1));}
  }
  bool ClearOfMain(Parcel r){
+  using(var timingScope=LayoutFunctionTiming.Start(o.FunctionTiming,"ClearOfMain")){
   double gap=o.MainParkingSetback;
   var expanded=new Parcel{X=r.X-gap,Y=r.Y-gap,W=r.W+2*gap,D=r.D+2*gap};
   Bounds(expanded,out int a,out int b,out int c,out int d);
   return mainSum[c,d]-mainSum[a,d]-mainSum[c,b]+mainSum[a,b]==0;
+ 
+  }
  }
  Block FrontageBlock(double x,double row,Asset asset,double depth,double gap,bool positive,bool rotated){
+  using(var timingScope=LayoutFunctionTiming.Start(o.FunctionTiming,"FrontageBlock")){
   double length=o.ContinuousFrontage?asset.Width:Math.Max(asset.Width,asset.Depth),lotDepth=o.ContinuousFrontage?asset.Depth:Math.Min(asset.Width,asset.Depth),road=Snap(o.ContinuousFrontage?o.ParkingAisle+2*o.ParkingPavingMargin:o.Road);
   if(o.ContinuousFrontage){depth=lotDepth;gap=road;}
   double by=positive?row+depth-lotDepth:row;
@@ -53,12 +57,17 @@ internal sealed partial class ResidentialLayout {
   building.Access=rotated?new Point(positive?by+lotDepth:by,x+length/2):new Point(x+length/2,positive?by+lotDepth:by);
   var block=new Block{LandscapeRemainder=true,MaxConnection=o.MaxAccessLength,Bounds=part(x,low,length,high-low,8),Gate=new Point(street.X+street.W/2,street.Y+street.D/2),Homes=building.Homes,FloorArea=building.FloorArea};
   block.Pieces.Add(building);block.Pieces.Add(street);if(o.ContinuousFrontage){block.StreetAxes[street]=new PlanRoute{Use="aisle",Width=road,Points=new List<Point>{new Point(rotated?street.X+street.W/2:street.X,rotated?street.Y:street.Y+street.D/2),new Point(rotated?street.X+street.W/2:street.X+street.W,rotated?street.Y+street.D:street.Y+street.D/2)}};}return block;
+ 
+  }
  }
  bool PlaceFrontage(Block block,bool edgeOnly=false){
+  using(var timingScope=LayoutFunctionTiming.Start(o.FunctionTiming,"PlaceFrontage")){
   var building=block.Pieces[0];
   if(exact.Any(r=>r.Kind==0&&!FrontageRules.Spaced(building,r,o.ParallelGap,o.Gap)))return false;
   if(edgeOnly&&Layout.Contains(new Parcel{X=building.X-12,Y=building.Y-12,W=building.W+24,D=building.D+24},poly))return false;
   return Place(block);
+ 
+  }
  }
  // A court is three independent lots, not a U-shaped prefab. Its two bars
  // face a shared open space; the perpendicular end bar leaves the other end
@@ -114,11 +123,11 @@ internal sealed partial class ResidentialLayout {
  void CourtyardHousing(){
   if(!o.MixedDirections||o.BuildingPattern!=0)return;
   int group=0;
-  var caps=assets.OrderBy(a=>Math.Max(a.Width,a.Depth)).ToList();
+  var caps=assets;
   for(int iy=1;iy<ny-1&&!Full;iy+=4)for(int ix=1;ix<nx-1&&!Full;ix+=4){
    if(map[ix,iy]!=Green)continue;bool placed=false;
-   for(int trial=0;trial<4&&!placed;trial++)foreach(var cap in caps){
-    var top=assets[group%assets.Count];var bottom=assets[(group+1)%assets.Count];
+   for(int trial=0;trial<4&&!placed;trial++)foreach(var cap in AssetChoice.Shuffle(caps,assetRandom)){
+    var top=assets[assetRandom.Next(assets.Count)];var bottom=assets[assetRandom.Next(assets.Count)];
     bool mirror=(group+trial)%2==1,rotate=trial>=2;
     var blocks=CourtGroup(x0+ix*cell,y0+iy*cell,top,bottom,cap,mirror,rotate,group);
     if(!PlaceCourt(blocks))continue;
@@ -130,9 +139,32 @@ internal sealed partial class ResidentialLayout {
    }
   }
  }
+ // Conservative reachability prefilter for infill only. No road outside the
+ // candidate bounds within maxLength+2 cells means FindRoute cannot reach a target.
+ bool HasInfillTarget(Block block,int[,] roads){
+  using(var timer=LayoutFunctionTiming.Start(o.FunctionTiming,"FrontageHousing.targetCheck")){
+   double radius=block.MaxConnection+2*cell;
+   if(double.IsInfinity(radius)||double.IsNaN(radius)||radius>1e8)return true;
+   int left=Math.Max(0,X(block.Gate.X-radius)),bottom=Math.Max(0,Y(block.Gate.Y-radius));
+   int right=Math.Min(nx,X(block.Gate.X+radius)+1),top=Math.Min(ny,Y(block.Gate.Y+radius)+1);
+   if(left>=right||bottom>=top)return false;
+   int Count(int a,int b,int c,int d)=>a>=c||b>=d?0:roads[c,d]-roads[a,d]-roads[c,b]+roads[a,b];
+   Bounds(block.Bounds,out int a0,out int b0,out int c0,out int d0);
+   return Count(left,bottom,right,top)>Count(Math.Max(left,a0),Math.Max(bottom,b0),Math.Min(right,c0),Math.Min(top,d0));
+  }
+ }
+ int[,] InfillRoadIndex(){
+  using(var timer=LayoutFunctionTiming.Start(o.FunctionTiming,"FrontageHousing.roadIndex")){
+   var sum=new int[nx+1,ny+1];
+   for(int y=0;y<ny;y++)for(int x=0;x<nx;x++)sum[x+1,y+1]=(map[x,y]==1?1:0)+sum[x,y+1]+sum[x+1,y]-sum[x,y];
+   return sum;
+  }
+ }
  void FrontageHousing(bool includeCourts=true){
+  using(var timingScope=LayoutFunctionTiming.Start(o.FunctionTiming,"FrontageHousing")){
   if(assets.Count==0)return;
   if(includeCourts)CourtyardHousing();
+  var infillRoads=InfillRoadIndex();
   double gap=Snap(Math.Max(o.ParallelGap,o.Road));
   // Fill residual pockets from local candidates. A modest orientation balance
   // selects trial order only: constraints decide fit, not a horizontal/vertical
@@ -144,19 +176,24 @@ internal sealed partial class ResidentialLayout {
     int total=exact.Count(r=>r.Kind==0),vertical=exact.Count(r=>r.Kind==0&&r.D>r.W);
     bool preferVertical=(o.MixedDirections||o.BuildingPattern==3)&&vertical<total*.34;
     bool placed=false;
+    foreach(var a in AssetChoice.Shuffle(assets,assetRandom)){
     foreach(bool rotated in new[]{preferVertical,!preferVertical}){
      if(rotated&&!o.MixedDirections&&o.BuildingPattern==0)continue;
-     for(int side=0;side<2&&!placed;side++)for(int i=0;i<assets.Count;i++){
-      int index=(assetIndex+i)%assets.Count;var a=assets[index];
+     for(int side=0;side<2&&!placed;side++){
       double x=x0+ix*cell,y=y0+iy*cell;
       var block=FrontageBlock(rotated?y:x,rotated?x:y,a,Math.Min(a.Width,a.Depth),gap,(total+side)%2==0,rotated);
       if(block.Pieces.Any(p=>p.Kind==0&&!BarOrientationAllowed(p)))continue;
-      if(!PlaceFrontage(block))continue;
-      assetIndex=(index+1)%assets.Count;placed=true;break;
+      if(!HasInfillTarget(block,infillRoads)||!PlaceFrontage(block))continue;
+      infillRoads=InfillRoadIndex();
+      placed=true;break;
      }
      if(placed)break;
     }
+    if(placed)break;
+    }
    }
+  }
+ 
   }
  }
 
@@ -250,11 +287,14 @@ internal sealed partial class ResidentialLayout {
     TryParkingPair(horizontal,start,run,v,aisle);
    }
   }
+  // original is the same immutable row snapshot used by the exact overlap test.
+  var candidateMask=ParkingCandidateMask.Build(original,nx,ny,x0,y0,cell,Math.Max(Snap(40),2*bay+widths.Max()),bay+widths.Max());
   foreach(double aisle in widths)
    foreach(double wanted in new[]{40.0,32.0,24.0,18.0})for(int rotation=0;rotation<2;rotation++)
     for(int y=1;y<ny-1;y++)for(int x=1;x<nx-1;x++){
      if(x==1)o.Cancellation.ThrowIfCancellationRequested();
      if(spaces>=target)return;
+     if(!candidateMask[x,y])continue;
      if(map[x,y]!=Green&&map[x,y]!=CourtGreen&&map[x,y]!=Paved)continue;
      double length=Snap(wanted),width=2*bay+aisle;
      Parcel Part(double u,double v,double w,double h,int kind=8)=>new Parcel{Kind=kind,X=x0+x*cell+(rotation==0?u:v),Y=y0+y*cell+(rotation==0?v:u),W=rotation==0?w:h,D=rotation==0?h:w,ParkingAlongX=rotation==0};
@@ -292,6 +332,11 @@ internal sealed partial class ResidentialLayout {
  }
  void SharedFrontageParking(){
   if(o.Parking<=0)return;
+  // This pass adds bays only: road cells cannot change. Cache their rectangle
+  // counts once and reject unserved candidates before expensive lot/access tests.
+  var roadCounts=new int[nx+1,ny+1];
+  for(int y=0;y<ny;y++)for(int x=0;x<nx;x++)roadCounts[x+1,y+1]=(map[x,y]==1?1:0)+roadCounts[x,y+1]+roadCounts[x+1,y]-roadCounts[x,y];
+  bool RoadRectangle(Parcel r){Bounds(r,out int a,out int b,out int c,out int d);if(a>nx||b>ny||c<0||d<0||c<a||d<b)return KindRectangle(r,1);return roadCounts[c,d]-roadCounts[a,d]-roadCounts[c,b]+roadCounts[a,b]==(c-a)*(d-b)&&Layout.Contains(r,poly);}
   double target=plan.Homes>0?Math.Ceiling(plan.Homes*o.ParkingPerHome*o.SurfaceParkingShare):plan.Area*o.Parking/o.SpaceArea;
   // Fill already served space after all housing is fixed. No dwelling is lost
   // to a parking quota. Shortfall remains visible; no underground capacity invented.
@@ -300,10 +345,10 @@ internal sealed partial class ResidentialLayout {
     if(spaces>=target)return;if(map[x,y]!=Green&&map[x,y]!=Paved&&map[x,y]!=CourtGreen)continue;
     double length=Math.Floor(wanted/o.BayWidth)*o.BayWidth;
     var bay=new Parcel{Kind=2,X=x0+x*cell,Y=y0+y*cell,W=rotation==0?length:o.BayDepth,D=rotation==0?o.BayDepth:length,ParkingAlongX=rotation==0,ParkingSpaces=(int)Math.Round(length/o.BayWidth)};
-    if(!ParkingSpace(bay))continue;
     double aisle=o.ParkingAisle;
     var fronts=rotation==0?new[]{new Parcel{X=bay.X,Y=bay.Y-aisle,W=bay.W,D=aisle},new Parcel{X=bay.X,Y=bay.Y+bay.D,W=bay.W,D=aisle}}:new[]{new Parcel{X=bay.X-aisle,Y=bay.Y,W=aisle,D=bay.D},new Parcel{X=bay.X+bay.W,Y=bay.Y,W=aisle,D=bay.D}};
-    if(!fronts.Any(r=>{if(rotation==0){r.X-=o.ParkingEndClearance;r.W+=2*o.ParkingEndClearance;}else{r.Y-=o.ParkingEndClearance;r.D+=2*o.ParkingEndClearance;}return KindRectangle(r,1);}))continue;
+    if(!fronts.Any(r=>{if(rotation==0){r.X-=o.ParkingEndClearance;r.W+=2*o.ParkingEndClearance;}else{r.Y-=o.ParkingEndClearance;r.D+=2*o.ParkingEndClearance;}return RoadRectangle(r);}))continue;
+    if(!ParkingSpace(bay))continue;
     Paint(bay,Fixed);exact.Add(bay);spaces+=bay.ParkingSpaces;
     if(rotation==0)x+=(int)Math.Ceiling((length+Math.Max(2,o.ParkingIsland))/cell)-1;
    }

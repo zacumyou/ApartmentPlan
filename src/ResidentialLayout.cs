@@ -13,6 +13,7 @@ internal sealed partial class ResidentialLayout {
  readonly List<Parcel> exact=new List<Parcel>();
  readonly List<Asset> assets;readonly Parcel entry;
  double floors;int spaces,assetIndex,modules,supplementalRoutes;
+ readonly Random assetRandom=new Random(19471);
  bool BarOrientationAllowed(Parcel p)=>o.BuildingPattern==1?p.W>=p.D-.01:o.BuildingPattern==2?p.D>=p.W-.01:true;
  sealed class Block {
   public bool SupplementalParking;public Parcel Bounds;public List<Parcel> Pieces=new List<Parcel>();
@@ -38,12 +39,18 @@ internal sealed partial class ResidentialLayout {
  int Y(double y)=>(int)Math.Floor((y-y0)/cell);
  void Bounds(Parcel r,out int a,out int b,out int c,out int d){a=Math.Max(0,X(r.X));b=Math.Max(0,Y(r.Y));c=Math.Min(nx,(int)Math.Ceiling((r.X+r.W-x0)/cell-1e-7));d=Math.Min(ny,(int)Math.Ceiling((r.Y+r.D-y0)/cell-1e-7));}
  bool Free(Parcel r){
+  using(var timingScope=LayoutFunctionTiming.Start(o.FunctionTiming,"Free")){
   if(r.X<x0||r.Y<y0||r.X+r.W>x0+nx*cell||r.Y+r.D>y0+ny*cell)return false;
   Bounds(r,out int a,out int b,out int c,out int d);
   for(int y=b;y<d;y++)for(int x=a;x<c;x++)if(map[x,y]!=Green||reserved[x,y]||edgeGreen[x,y])return false;
   return true;
+ 
+  }
  }
- void Paint(Parcel r,int kind){Bounds(r,out int a,out int b,out int c,out int d);for(int y=b;y<d;y++)for(int x=a;x<c;x++)if(map[x,y]!=Outside)map[x,y]=kind;}
+ void Paint(Parcel r,int kind){
+  using(var timingScope=LayoutFunctionTiming.Start(o.FunctionTiming,"Paint")){Bounds(r,out int a,out int b,out int c,out int d);for(int y=b;y<d;y++)for(int x=a;x<c;x++)if(map[x,y]!=Outside)map[x,y]=kind;
+  }
+ }
  Block Template(double x,double y,Asset asset,bool single,bool rotated,bool aligned=false,bool compact=false){
   // Orient the actual selected lot's long side along the common building row.
   // This rotates its footprint; it never stretches a square lot into a slab.
@@ -98,6 +105,7 @@ internal sealed partial class ResidentialLayout {
  }
  bool RoadCell(int x,int y)=>x>=0&&y>=0&&x<nx&&y<ny&&map[x,y]==1;
  bool Route(Block block){
+  using(var timingScope=LayoutFunctionTiming.Start(o.FunctionTiming,"Route")){
   Bounds(block.Bounds,out int a,out int b,out int c,out int d);
   if(block.SupplementalParking){
    if(supplementalRoutes++>=256)return false;
@@ -116,9 +124,12 @@ internal sealed partial class ResidentialLayout {
   var path=FindRoute(block.Gate,target,width,false,block.MaxConnection);
   if(path==null||path.Count*cell>block.MaxConnection)return false;
   DrawRoute(path,width,"access");return true;
+ 
+  }
  }
 
  bool Fits(Block block){
+  using(var timingScope=LayoutFunctionTiming.Start(o.FunctionTiming,"Fits")){
   if(!Layout.Contains(block.Bounds,poly))return false;
   if(block.Pieces.Any(r=>(r.Kind==0||r.Kind==2)&&!ClearOfMain(r)))return false;
   Bounds(block.Bounds,out int a,out int b,out int c,out int d);
@@ -131,8 +142,11 @@ internal sealed partial class ResidentialLayout {
    bool covered=false;foreach(var piece in block.Pieces)if(piece.Kind==1&&px>=piece.X&&px<piece.X+piece.W&&py>=piece.Y&&py<piece.Y+piece.D){covered=true;break;}if(!covered)return false;
   }
   return true;
+ 
+  }
  }
  bool Place(Block block){
+  using(var timingScope=LayoutFunctionTiming.Start(o.FunctionTiming,"Place")){
   if(!Fits(block)||exact.Count(r=>r.Kind==0)+block.Pieces.Count(r=>r.Kind==0)>o.MaxBuildings||o.RespectTargetFar&&floors+block.FloorArea>plan.Area*o.TargetFar/100+.001)return false;
   Bounds(block.Bounds,out int a,out int b,out int c,out int d);var backup=new int[c-a,d-b];
   for(int y=b;y<d;y++)for(int x=a;x<c;x++)backup[x-a,y-b]=map[x,y];
@@ -153,15 +167,16 @@ internal sealed partial class ResidentialLayout {
   }
   foreach(var r in block.Pieces)if(r.Kind==0||r.Kind==2){exact.Add(r);spaces+=r.ParkingSpaces;}
   floors+=block.FloorArea;plan.Homes+=block.Homes;modules++;return true;
+ 
+  }
  }
  bool Full=>exact.Count(r=>r.Kind==0)>=o.MaxBuildings||o.RespectTargetFar&&floors>=plan.Area*o.TargetFar/100;
  bool TryBlock(double x,double y,bool single,bool rotated,bool aligned,bool edgeOnly=false,bool compact=false){
   if(Full)return false;
-  for(int n=0;n<assets.Count;n++){
-   var asset=assets[(assetIndex+n)%assets.Count];var block=Template(x,y,asset,single,rotated,aligned,compact);
+  foreach(var asset in AssetChoice.Shuffle(assets,assetRandom)){var block=Template(x,y,asset,single,rotated,aligned,compact);
    if(!Fits(block))continue;
    if(edgeOnly){var expanded=new Parcel{X=block.Bounds.X-8,Y=block.Bounds.Y-8,W=block.Bounds.W+16,D=block.Bounds.D+16};if(Layout.Contains(expanded,poly))continue;}
-   if(!Place(block))continue;assetIndex=(assetIndex+n+1)%assets.Count;return true;
+   if(!Place(block))continue;return true;
   }
   return false;
  }
@@ -312,11 +327,11 @@ internal sealed partial class ResidentialLayout {
  internal static Plan Generate(IList<Point> boundary,IList<Point> entrances,IList<Asset> assets,LayoutOptions o,IList<Parcel> ramps,IList<ManualZone> zones,IList<ManualRoad> roads=null){
   if(!Layout.Valid(boundary)||entrances==null||entrances.Count==0||entrances.Count>16)throw new ArgumentException("Boundary");
   var p=Layout.Frame(boundary,entrances[0]);var timer=System.Diagnostics.Stopwatch.StartNew();var solver=new ResidentialLayout(p,o,assets,zones);
-  void Stage(string name){o.Cancellation.ThrowIfCancellationRequested();p.LayoutTimings[name]=timer.ElapsedMilliseconds;timer.Restart();}
+  void Stage(string name){o.Cancellation.ThrowIfCancellationRequested();p.LayoutTimings[name]=timer.ElapsedMilliseconds;o.Timing?.Invoke(name,timer.ElapsedMilliseconds);timer.Restart();}
   Stage("grid");
   if(ramps!=null)foreach(var r in ramps){if(!Layout.Contains(r,solver.poly)||!solver.Free(r))throw new ArgumentException("RampFit");solver.Paint(r,Fixed);solver.exact.Add(r);}
   for(int i=1;i<entrances.Count;i++)solver.EntranceParcel(entrances[i]);
-  solver.MainRoads();solver.AddManualRoads(roads);solver.ProtectMainRoad();Stage("mainRoad");solver.ParkingCourtHousing();Stage("housing");solver.AddParkingAisles();solver.SharedFrontageParking();solver.JoinParkingGaps();solver.CloseParkingLoops();solver.RepairFrontageConnections();solver.PreferWideAccess();solver.ReclaimWideParking();solver.FillPavedParkingCourts();solver.FillOpenSpaceParking();Stage("parking");if(o.PedestrianNetwork){solver.OpenSpaceWalks();solver.ConnectWalks();solver.RoundWalkCorners();}Stage("walks");solver.Finish();ParkingTraffic.Validate(p,o);Stage("finish");
+  solver.MainRoads();Stage("mainSkeleton");solver.AddManualRoads(roads);Stage("manualRoads");solver.ProtectMainRoad();Stage("mainRoad");solver.ParkingCourtHousing();Stage("housing");solver.AddParkingAisles();Stage("parkingAisles");solver.SharedFrontageParking();Stage("sharedParking");solver.JoinParkingGaps();Stage("parkingGaps");solver.CloseParkingLoops();Stage("parkingLoops");solver.RepairFrontageConnections();Stage("frontageRepair");solver.PreferWideAccess();Stage("wideAccess");solver.ReclaimWideParking();Stage("reclaimParking");solver.FillPavedParkingCourts();Stage("pavedParking");solver.FillOpenSpaceParking();Stage("openParking");Stage("parking");if(o.PedestrianNetwork){solver.OpenSpaceWalks();Stage("openWalks");solver.ConnectWalks();Stage("walkConnections");solver.RoundWalkCorners();Stage("walkCorners");}Stage("walks");solver.Finish();Stage("geometryFinish");ParkingTraffic.Validate(p,o);Stage("finish");
   p.Diagnostics="entrances="+entrances.Count+" routes="+p.Routes.Count+" unreachable="+p.UnreachableAccess.Count+" parkingAccessFailures="+p.ParkingAccessFailures;return p;
  }
 }

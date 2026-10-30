@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 namespace ApartmentPlan {
@@ -21,14 +21,15 @@ public static class ConstructionGraph {
    var outward=(p-e.A).Length<.001?e.A-e.B:e.B-e.A;
    foreach(var other in raw){if(ReferenceEquals(e,other)||e.Use!="pedestrian"&&other.Use=="pedestrian")continue;
     var d=other.B-other.A;double t=Math.Max(0,Math.Min(1,SiteFrame.Dot(p-other.A,d)/SiteFrame.Dot(d,d)));var q=other.A+d*t;double distance=(q-p).Length;
-    if(distance<.03){best=0;break;}
+    // Near contact still needs a split and shared node. The short-edge contraction below welds it.
+    if(distance<.03){target=other;join=q;best=distance;break;}
     if(SiteFrame.Dot(q-p,outward)<-.001||distance>other.Width/2+2||distance>=best)continue;
     // Do not turn neighbouring parallel aisles into diagonal roads.
     if(e.Use!="pedestrian"&&Math.Abs(Layout.Cross(e.B-e.A,d))/((e.B-e.A).Length*d.Length)<.15&&t>.001&&t<.999)continue;
     if(e.Use=="pedestrian"&&!ClearPath(plan,p,q,e.Width))continue;
     target=other;join=q;best=distance;
    }
-   if(target!=null&&best>.03)extensions.Add(new ConstructionEdge{A=p,B=join,Use=e.Use,Width=e.Width});
+   if(target!=null&&best>.000001)extensions.Add(new ConstructionEdge{A=p,B=join,Use=e.Use,Width=e.Width});
   }
   raw.AddRange(extensions);
   var cuts=raw.Select(e=>new List<double>{0,1}).ToArray();
@@ -71,7 +72,35 @@ public static class ConstructionGraph {
    result.Remove(edge);welded=true;break;
   }}
   MergeStraight(result);
+  if(!plan.Tower&&!plan.VillaExistingRoadsOnly)JoinRibbonComponents(result);
   return result;
+ }
+ // Join separate vehicle components only where an endpoint already lies in
+ // another road ribbon. This does not bridge unrelated roads across empty land.
+ static void JoinRibbonComponents(List<ConstructionEdge> edges){
+  while(true){
+   var roads=edges.Where(e=>e.Use!="pedestrian").ToList();
+   var incident=new Dictionary<string,List<int>>();
+   for(int i=0;i<roads.Count;i++)foreach(var p in new[]{roads[i].A,roads[i].B}){var key=Key(p);if(!incident.TryGetValue(key,out var list))incident[key]=list=new List<int>();list.Add(i);}
+   var component=Enumerable.Repeat(-1,roads.Count).ToArray();int count=0;
+   for(int i=0;i<roads.Count;i++){if(component[i]>=0)continue;var queue=new List<int>{i};component[i]=count;
+    for(int at=0;at<queue.Count;at++){int j=queue[at];foreach(var p in new[]{roads[j].A,roads[j].B})foreach(int k in incident[Key(p)])if(component[k]<0){component[k]=count;queue.Add(k);}}count++;
+   }
+   if(count<2)return;
+   ConstructionEdge source=null,target=null;Point from=default,to=default;double best=double.MaxValue;
+   for(int i=0;i<roads.Count;i++)foreach(var p in new[]{roads[i].A,roads[i].B})for(int j=0;j<roads.Count;j++){
+    if(component[i]==component[j])continue;var e=roads[j];var d=e.B-e.A;double length2=SiteFrame.Dot(d,d);if(length2<1e-8)continue;
+    double t=SiteFrame.Dot(p-e.A,d)/length2;if(t<0||t>1)continue;var q=e.A+d*t;double gap=(q-p).Length;
+    if(gap<=.000001||gap>e.Width/2+.03||gap>=best)continue;
+    source=roads[i];target=e;from=p;to=q;best=gap;
+   }
+   if(target==null)return;
+   // Use exact shared endpoints on both halves, not independent projections.
+   if((to-target.A).Length<.1)to=target.A;
+   else if((to-target.B).Length<.1)to=target.B;
+   else{edges.Add(new ConstructionEdge{A=to,B=target.B,Use=target.Use,Width=target.Width});target.B=to;}
+   edges.Add(new ConstructionEdge{A=from,B=to,Use=source.Use,Width=source.Width});
+  }
  }
  static bool ClearPath(Plan plan,Point a,Point b,double width){
   a=plan.Local(a);b=plan.Local(b);double pad=width/2;

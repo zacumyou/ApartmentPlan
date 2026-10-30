@@ -5,6 +5,13 @@ using ApartmentPlan;
 static class NetworkReplacementTests {
  public static void Run(){
   FrameWorkTests.Run();
+  var connected=NetworkReplacementPolicy.ConnectedComponent(1,new List<Tuple<int,int>>{Tuple.Create(1,2),Tuple.Create(2,3),Tuple.Create(3,4),Tuple.Create(8,9)});
+  if(!connected.Contains(4)||connected.Contains(8))throw new Exception("ground chain endpoint identity");
+  var gap=NetworkReplacementPolicy.ConnectedComponent(1,new List<Tuple<int,int>>{Tuple.Create(1,2),Tuple.Create(5,4)});
+  if(gap.Contains(4))throw new Exception("disconnected road halves accepted");
+  if(PlanLabelText.Wrap("백련산 SK뷰 아이파크 102동")!="백련산 SK뷰\n아이파크 102동"||PlanLabelText.Wrap("에코시티 더샵 A")!="에코시티 더샵\nA"||PlanLabelText.Wrap("  A   B  ")!="A B")throw new Exception("two word name wrapping");
+  if(!PlanLabelText.Wrap(new string('가',29)).Split('\n').Select(x=>x.Length).SequenceEqual(new[]{14,14,1}))throw new Exception("unspaced label bound");
+  Console.WriteLine("PASS two-word Korean labels, long unspaced labels; connected road chain and disconnected/foreign rejection.");
   var through=TowerGeometry.Line(new Point(-20,0),new Point(20,0));
   if(!TowerFrontJoins.HasJunction(new Point(0,0),new[]{through})||TowerFrontJoins.HasJunction(new Point(0,5),new[]{through}))throw new Exception("interior T junction fillet protection");
   Console.WriteLine("PASS through-road interior blocks corner rounding; isolated bend remains eligible.");
@@ -28,6 +35,9 @@ static class NetworkReplacementTests {
 
   // A joint-only native reduction has no removed-edge candidate: the old path
   // leaves it blocked even though both roads survive and a single curve bridges it.
+  if(NetworkReplacementPolicy.JointScope(false,false)||!NetworkReplacementPolicy.JointScope(false,true)||!NetworkReplacementPolicy.JointScope(true,false))throw new Exception("joint scope propagation");
+  if(!NetworkReplacementPolicy.RetainedJoint(true,NetworkReplacementPolicy.JointScope(false,true),true,true)||NetworkReplacementPolicy.RetainedJoint(true,NetworkReplacementPolicy.JointScope(false,true),false,true)||NetworkReplacementPolicy.RetainedJoint(true,NetworkReplacementPolicy.JointScope(false,true),true,false))throw new Exception("propagated scope must still preserve both roads and bridge");
+  Console.WriteLine("PASS previously verified adjacent road supplies joint scope; missing coverage/bridge and unrelated joints still blocked.");
   var jointOnly=new HashSet<int>();NetworkReplacementPolicy.ExpandMerges(jointOnly,new List<NetworkReplacementPolicy.Merge<int>>());
   if(jointOnly.Contains(77))throw new Exception("old joint-only reproduction invalid");
   for(int mask=0;mask<16;mask++)if(NetworkReplacementPolicy.RetainedJoint((mask&1)!=0,(mask&2)!=0,(mask&4)!=0,(mask&8)!=0)!=(mask==15))throw new Exception("joint-only protection predicate");
@@ -102,3 +112,4 @@ static class NetworkReplacementTests {
   Console.WriteLine("PASS scoped road children allowed; foreign objects, buildings and their children, missing roots, owner cycles and unreplaced nodes blocked. Synthetic ownership fixture, not game preview.");
  }
 }
+

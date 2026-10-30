@@ -79,6 +79,11 @@ internal sealed partial class ResidentialLayout {
   }
   return false;
  }
+ ArgumentException EntranceFailure(bool spacing,int attempts){
+  var e=new ArgumentException(spacing?"EntranceSpacing":"EntranceFit");
+  e.Data["entranceEvidence"]=new Dictionary<string,int>{{"reason",spacing?61:60},{"ordinal",entrances.Count},{"connected",entrances.Count+1},{"roadWidthCm",ManualRoadFailure.Centimetres(o.Road)},{"lengthCm",ManualRoadFailure.Centimetres(Math.Max(o.Entrance,o.Road+2*cell))},{"marginCm",ManualRoadFailure.Centimetres(o.Road)},{"widthCm",ManualRoadFailure.Centimetres(cell)},{"edges",attempts}};
+  return e;
+ }
  Parcel EntranceParcel(Point world){
   var border=SiteFrame.Nearest(plan.Boundary,world,out var inward);var p=plan.Local(border);
   var normal=new Point(SiteFrame.Dot(inward,plan.Right),SiteFrame.Dot(inward,plan.Forward));
@@ -86,12 +91,14 @@ internal sealed partial class ResidentialLayout {
   var direction=alongX?new Point(sign,0):new Point(0,sign);
   // A short clipped apron meets a sloping edge; all full-width interior roads
   // remain in the common frame. Near-corner entrances are rejected, not moved.
+  int attempts=0;
   for(double inset=0;inset<=o.Road;inset+=cell/2){
+   attempts++;
    double entranceLength=Math.Max(o.Entrance,o.Road+2*cell);
    var start=p+direction*inset;var end=start+direction*entranceLength;
    var r=new Parcel{Kind=1,X=alongX?Math.Min(start.X,end.X):start.X-o.Road/2,Y=alongX?start.Y-o.Road/2:Math.Min(start.Y,end.Y),W=alongX?entranceLength:o.Road,D=alongX?o.Road:entranceLength};
    if(!Layout.Contains(r,poly))continue;
-   if(entrances.Any(e=>Layout.Overlap(e,r,o.Road)))throw new ArgumentException("EntranceSpacing");
+   if(entrances.Any(e=>Layout.Overlap(e,r,o.Road)))throw EntranceFailure(true,attempts);
    Bounds(r,out int a,out int b,out int c,out int d);
    for(int y=b;y<d;y++)for(int x=a;x<c;x++)if(reserved[x,y])throw new ArgumentException("ZoneFit");else if(map[x,y]==Fixed)throw new ArgumentException("RampFit");
    Paint(r,1);entrances.Add(r);ProtectEntranceWalks(p);entranceDirections.Add(direction);entranceTips.Add(end-direction*Math.Min(entranceLength/2,o.Road/2+cell));
@@ -100,7 +107,7 @@ internal sealed partial class ResidentialLayout {
    Bounds(apron,out a,out b,out c,out d);for(int y=b;y<d;y++)for(int x=a;x<c;x++){if(reserved[x,y])throw new ArgumentException("ZoneFit");if(map[x,y]==Fixed)throw new ArgumentException("RampFit");if(map[x,y]!=Outside)map[x,y]=1;}
    return r;
   }
-  throw new ArgumentException("EntranceFit");
+  throw EntranceFailure(false,attempts);
  }
  void ManualZones(IList<ManualZone> zones){
   if(zones==null)return;
@@ -127,35 +134,45 @@ internal sealed partial class ResidentialLayout {
   public void Push(double cost,int state){var value=(cost,state);int i=values.Count;values.Add(value);while(i>0){int parent=(i-1)/2;if(values[parent].Item1<=cost)break;values[i]=values[parent];i=parent;}values[i]=value;}
   public (double,int) Pop(){var result=values[0];var last=values[values.Count-1];values.RemoveAt(values.Count-1);if(values.Count==0)return result;int i=0;while(i*2+1<values.Count){int child=i*2+1;if(child+1<values.Count&&values[child+1].Item1<values[child].Item1)child++;if(values[child].Item1>=last.Item1)break;values[i]=values[child];i=child;}values[i]=last;return result;}
  }
+ int lastRouteFailure,lastRouteVisited;
+ int[] routeEpochs;int routeEpoch;
  double[] routeDistances;int[] routePrevious;int[,] routeSums;readonly RouteHeap routeHeap=new RouteHeap();
  static readonly int[] routeDx={1,0,-1,0},routeDy={0,1,0,-1};
  List<Point> FindRoute(Point source,Func<int,int,bool> target,double width,bool pedestrian=false,double maxLength=double.MaxValue){
+  using(var timingScope=LayoutFunctionTiming.Start(o.FunctionTiming,"FindRoute")){
+  lastRouteFailure=0;lastRouteVisited=0;
   int span=(int)Math.Ceiling(width/cell),lo=span/2,hi=span-lo;
   var sum=routeSums??(routeSums=new int[nx+1,ny+1]);
+  using(var phase=LayoutFunctionTiming.Start(o.FunctionTiming,"FindRoute.obstacleSum")){
   for(int y=0;y<ny;y++)for(int x=0;x<nx;x++){
    int k=map[x,y];bool blocked=k==Outside||k==Fixed||k==Reserve||k==3||k==5||(pedestrian&&entranceWalkBuffer[x,y])||(!pedestrian&&((mainJunctionBuffer?[x,y]??false)||reserved[x,y]||edgeGreen[x,y]&&k!=1&&!EntranceApproach(x,y)));
    sum[x+1,y+1]=(blocked?1:0)+sum[x,y+1]+sum[x+1,y]-sum[x,y];
   }
+  }
   Func<int,int,bool> clear=(x,y)=>{int a=x-lo,b=y-lo,c=x+hi,d=y+hi;return a>=0&&b>=0&&c<=nx&&d<=ny&&sum[c,d]-sum[a,d]-sum[c,b]+sum[a,b]==0;};
-  int sx=X(source.X),sy=Y(source.Y);if(!clear(sx,sy))return null;
+  int sx=X(source.X),sy=Y(source.Y);if(!clear(sx,sy)){lastRouteFailure=1;return null;}
   o.Cancellation.ThrowIfCancellationRequested();
-  int count=nx*ny*4;var dist=routeDistances??(routeDistances=new double[count]);var prev=routePrevious??(routePrevious=new int[count]);for(int i=0;i<count;i++){dist[i]=double.MaxValue;prev[i]=-1;}
-  var heap=routeHeap;heap.Clear();for(int dir=0;dir<4;dir++){int id=(sy*nx+sx)*4+dir;dist[id]=0;heap.Push(0,id);}
+  int count=nx*ny*4;var dist=routeDistances??(routeDistances=new double[count]);var prev=routePrevious??(routePrevious=new int[count]);var epochs=routeEpochs??(routeEpochs=new int[count]);using(var phase=LayoutFunctionTiming.Start(o.FunctionTiming,"FindRoute.reset")){if(routeEpoch==int.MaxValue){Array.Clear(epochs,0,epochs.Length);routeEpoch=0;}routeEpoch++;}
+  var heap=routeHeap;heap.Clear();for(int dir=0;dir<4;dir++){int id=(sy*nx+sx)*4+dir;epochs[id]=routeEpoch;dist[id]=0;prev[id]=-1;heap.Push(0,id);}
   var dx=routeDx;var dy=routeDy;int found=-1;
-  int checks=0;while(heap.Count>0){if((++checks&255)==0)o.Cancellation.ThrowIfCancellationRequested();var item=heap.Pop();int id=item.Item2;if(item.Item1>dist[id]+1e-6)continue;int dir=id%4,n=id/4,x=n%nx,y=n/nx;
+  int checks=0;using(var phase=LayoutFunctionTiming.Start(o.FunctionTiming,"FindRoute.search")){while(heap.Count>0){if((++checks&255)==0)o.Cancellation.ThrowIfCancellationRequested();var item=heap.Pop();int id=item.Item2;if(item.Item1>dist[id]+1e-6)continue;int dir=id%4,n=id/4,x=n%nx,y=n/nx;
    if(target(x,y)){found=id;break;}
    if((new Point(x0+(x+.5)*cell,y0+(y+.5)*cell)-source).Length>maxLength)continue;
    for(int k=0;k<4;k++){
     if(k==(dir+2)%4||pedestrian&&map[x,y]==1&&k!=dir&&prev[id]>=0)continue;int xx=x+dx[k],yy=y+dy[k];if(!clear(xx,yy))continue;
     int next=(yy*nx+xx)*4+k;double cost=item.Item1+cell*(pedestrian&&map[xx,yy]==1?3:1)+(k==dir?0:Math.Max(width*2,8));
-    if(cost>=dist[next])continue;dist[next]=cost;prev[next]=id;heap.Push(cost,next);
+    if(epochs[next]==routeEpoch&&cost>=dist[next])continue;epochs[next]=routeEpoch;dist[next]=cost;prev[next]=id;heap.Push(cost,next);
    }
   }
-  if(found<0)return null;var result=new List<Point>();
+  }
+  lastRouteVisited=checks;if(found<0){lastRouteFailure=2;return null;}var result=new List<Point>();
   for(int id=found;id>=0;id=prev[id]){int n=id/4;result.Add(new Point(x0+(n%nx+((span%2)==0?0:.5))*cell,y0+(n/nx+((span%2)==0?0:.5))*cell));}
   result.Reverse();return result;
+ 
+  }
  }
  void DrawRoute(List<Point> points,double width,string use){
+  using(var timingScope=LayoutFunctionTiming.Start(o.FunctionTiming,"DrawRoute")){
   int span=(int)Math.Ceiling(width/cell),lo=span/2,hi=span-lo;
   if(use=="access"||use=="aisleWide"||use=="main"&&o.MainRoadCornerMode!=2){
    double actualWidth=use=="aisleWide"?width:span*cell;
@@ -178,6 +195,8 @@ internal sealed partial class ResidentialLayout {
   var route=new PlanRoute{Use=use,Width=use=="aisleWide"?width:span*cell};
   for(int i=0;i<points.Count;i++)if(i==0||i==points.Count-1||Math.Abs(Layout.Cross(points[i]-points[i-1],points[i+1]-points[i]))>.01)route.Points.Add(points[i]);
   plan.Routes.Add(route);
+ 
+  }
  }
  void MainRoads(){
   if(entranceTips.Count>1){
@@ -202,7 +221,14 @@ internal sealed partial class ResidentialLayout {
     var route=FindRoute(start,(x,y)=>x==tx&&y==ty,o.Road);if(route==null)continue;
     double score=(target-start).Length;if(score>best){chosen=route;best=score;}if(chosen!=null)break;
    }
-   if(chosen!=null&&!TryMainSkeleton(chosen))throw CurveFailure(41,0,best);
+   if(chosen!=null&&!TryMainSkeleton(chosen)){
+    // FindRoute returns floored grid points. Retry at the exact entrance tip:
+    // translating the whole skeleton preserves its turns, and the full ribbon
+    // validation still rejects real boundary/obstacle conflicts. Successful
+    // original skeletons are never changed.
+    var offset=start-chosen[0];
+    if(offset.Length<1e-8||!TryMainSkeleton(chosen.Select(p=>p+offset).ToList()))throw CurveFailure(41,0,best);
+   }
   }
  }
 }

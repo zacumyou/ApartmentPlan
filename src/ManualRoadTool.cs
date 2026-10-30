@@ -27,10 +27,16 @@ public partial class PlanTool {
     best=distance;snap.Position=new Point(exact.x,exact.z);
    }
   }
-  roadCursor=snap.Position;roadGhost.Clear();roadGhostValid=Layout.Inside(snap.Position,s.Boundary);
+  // Finishing uses the raw click before snapping and zero-length preview rejection.
+  if(s.CanFinishRoadAt(raw)){
+   snap.Position=s.RoadPoints[0];roadCursor=snap.Position;roadGhost.Clear();roadGhostValid=true;Hint="AP.RoadFinishAtEnd";
+   if(applyAction.WasPressedThisFrame())s.Click(WorldPoint(snap.Position,position.y));
+   s.Elevation=position.y;DrawOutline(s,snap,true);return;
+  }
+  roadCursor=snap.Position;roadGhost.Clear();roadGhostValid=true;
   var controls=s.RoadPoints.Concat(new[]{snap.Position}).ToList();
   if(controls.Count==(s.RoadCurved?3:2)){
-   try{roadGhost=new ManualRoad{Curved=s.RoadCurved,Points=controls}.Sample();roadGhostValid&=RoadRibbonInside(s,roadGhost);}
+   try{roadGhost=new ManualRoad{Curved=s.RoadCurved,Points=controls}.Sample();}
    catch(ArgumentException){roadGhostValid=false;}
   }else roadGhost=controls;
   Hint=roadGhostValid?s.RoadHint:"AP.ManualRoadFit";

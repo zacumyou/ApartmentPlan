@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Game.Common;
@@ -70,15 +70,20 @@ public partial class ConstructionTool {
     if(t.m_Original==Entity.Null&&(t.m_Flags&TempFlags.Create)!=0&&(t.m_Flags&TempFlags.Delete)==0&&(EntityManager.GetComponentData<Game.Areas.Area>(e).m_Flags&Game.Areas.AreaFlags.Complete)!=0)candidates.Add(e);
    }
   int triangles=0,empty=0;
-  for(int index=0;index<expectedPavement.Count;index++){yield return 0;var target=expectedPavement[index];
+  for(int index=0;index<expectedPavement.Count;index++){yield return 0;var target=expectedPavement[index];int before=appliedPavement.Count,samePrefab=0,sameNodes=0;
    foreach(var e in candidates){
     if(matched.Contains(e)||EntityManager.GetComponentData<PrefabRef>(e).m_Prefab!=expectedSurfacePrefabs[index])continue;
-    var nodes=EntityManager.GetBuffer<Game.Areas.Node>(e,true);if(nodes.Length!=target.Length)continue;
+    samePrefab++;var nodes=EntityManager.GetBuffer<Game.Areas.Node>(e,true);if(nodes.Length!=target.Length)continue;sameNodes++;
     // Native generation can rotate or reverse a closed polygon's node order.
     bool match=true;foreach(var p in target){bool found=false;for(int i=0;i<nodes.Length;i++)found|=math.distancesq(nodes[i].m_Position.xz,p.xz)<.0001f;if(!found){match=false;break;}}
     if(match){int count=EntityManager.HasBuffer<Game.Areas.Triangle>(e)?EntityManager.GetBuffer<Game.Areas.Triangle>(e,true).Length:0;triangles+=count;if(count==0)empty++;appliedPavement.Add(e);matched.Add(e);break;}
    }
+   if(appliedPavement.Count==before){
+    evidenceTotal++;
+    if(failureEvidence.Count<24)failureEvidence.Add(new Dictionary<string,int>{{"reason",62},{"ordinal",index},{"kind",5},{"edges",candidates.Count},{"connected",samePrefab},{"flags",sameNodes},{"lengthCm",target.Length}});
+   }
   }
+  if(appliedPavement.Count!=expectedPavement.Count)Trace.Event("construction.pavement.failure","expected="+expectedPavement.Count+" matched="+appliedPavement.Count+" candidates="+candidates.Count);
   if(expectedPavement.Count>0)Trace.Event("construction.pavement.geometry","matched="+appliedPavement.Count+" expected="+expectedPavement.Count+" triangles="+triangles+" emptyMeshes="+empty);
  }
 }

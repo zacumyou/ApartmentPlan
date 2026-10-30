@@ -34,7 +34,7 @@ public partial class ConstructionTool:ToolBaseSystem {
  PlanSystem Plans=>World.GetExistingSystemManaged<PlanSystem>();
  protected override void OnCreate(){base.OnCreate();temps=GetEntityQuery(ComponentType.ReadOnly<Temp>(),ComponentType.Exclude<Deleted>());}
  protected override void OnStartRunning(){base.OnStartRunning();RunGeneration++;ClearWarnings();ClearEvidence();if(Plans!=null){Plans.NativeFailureSnapshot=null;Plans.NativeFailureEvidence=null;}failureStage=0;forceDemolitionStage=0;preexistingRoadIndex=new SpatialLookup<PlanBezier>(64);ResetProgress();demolitionPrompted=false;villaStage=0;roadWaitFrames=roadStableFrames=0;roadSignature=-1;stagedRoads.Clear();frame=0;attachmentPass=0;surfacePass=0;submitted=false;applyRequested=false;committed=false;Valid=false;Report="";Notice="";Metrics.Clear();expectedPavement.Clear();appliedPavement.Clear();pavementPrefab=Entity.Null;expectedTrees.Clear();appliedTrees.Clear();expected.Clear();expectedBays.Clear();bayDefinitions.Clear();appliedBuildings.Clear();appliedBays.Clear();OwnedEntities.Clear();previewRefreshAt=0;StartDemolitionRequest();}
- protected override void OnStopRunning(){RunGeneration++;ClearWarnings();ClearEvidence();failureStage=0;forceDemolitionStage=0;previewRefreshAt=0;ClearDefinitions();applyMode=ApplyMode.Clear;Valid=false;base.OnStopRunning();}
+ protected override void OnStopRunning(){RunGeneration++;ClearWarnings();ClearEvidence();failureStage=0;forceDemolitionStage=0;previewRefreshAt=0;ClearDefinitions();applyMode=ApplyMode.Clear;Valid=false;Demolishing=false;requestedDemolition=-1;requestedDemolitionTargets=null;if(!committed){Report="";Notice="";}base.OnStopRunning();}
  internal void Apply(){if(Valid&&!committed){ResetProgress();applyRequested=true;}}
  void ClearDefinitions(){deferDefinitions=false;previewWork?.Dispose();previewWork=null;validation=null;foreach(var e in definitions)if(EntityManager.Exists(e))EntityManager.DestroyEntity(e);definitions.Clear();submittedConnections.Clear();submittedCourses.Clear();}
  int failureStage;
@@ -49,7 +49,7 @@ public partial class ConstructionTool:ToolBaseSystem {
   Trace.Event("construction.failure.evidence",Newtonsoft.Json.JsonConvert.SerializeObject(failureEvidence),true);
   Trace.Event("construction.failure.metrics",string.Join(" ",Metrics.Select(p=>p.Key+"="+p.Value)));
  }
- void Status(string key,string detail=""){var s=Plans;if(s==null)return;if(key=="AP.NativeBlocked"){CaptureFailure();if(WarningShapes.Count>0)Notice=warningNotice.Length>0?warningNotice:"AP.Warning.Native";}else if(key=="AP.NativeReady"||key=="AP.NativeApplied")ClearWarnings();if(key=="AP.NativeBlocked"&&s.Status!=key)s.Sound(PlanSound.Fail);s.Status=key;Report=detail;s.Revision++;Trace.Event("construction."+key,detail);}
+ void Status(string key,string detail=""){var s=Plans;if(s==null)return;if(key=="AP.NativeBlocked"&&World.GetExistingSystemManaged<ToolSystem>()?.activeTool!=this)return;if(key=="AP.NativeBlocked"){CaptureFailure();if(WarningShapes.Count>0)Notice=warningNotice.Length>0?warningNotice:"AP.Warning.Native";}else if(key=="AP.NativeReady"||key=="AP.NativeApplied")ClearWarnings();if(key=="AP.NativeBlocked"&&s.Status!=key)s.Sound(PlanSound.Fail);s.Status=key;Report=detail;s.Revision++;Trace.Event("construction."+key,detail);}
  FrameWork previewWork;ValidationResult validation;
  bool AdvanceWork(){
   if(!previewWork.Step())return false;
@@ -178,13 +178,18 @@ public partial class ConstructionTool:ToolBaseSystem {
   }
   for(int i=0;i<bayDefinitions.Count;i++){
    SetProgress(65+13*i/Math.Max(1,bayDefinitions.Count));yield return i%4==0?1:0;var bay=bayDefinitions[i];
-   var port=bay.Item2+bay.Item3*(bay.Item4*.5f);Entity parent=Entity.Null;float best=float.MaxValue;
+   var port=bay.Item2+bay.Item3*(bay.Item4*.5f);Entity parent=Entity.Null;float best=float.MaxValue;int examined=0,rejected=0;float nearest=float.MaxValue,nearestLimit=0,nearestWidth=0;
    foreach(var candidate in candidates.At(port.x,port.z)){
     var curve=candidate.Curve;MathUtils.Distance(curve,port,out float t);var point=MathUtils.Position(curve,t);float d=math.distance(point.xz,port.xz);
+    examined++;float limit=candidate.Width*.5f+Mod.Options.ParkingPavingMargin+2;
+    if(d<nearest){nearest=d;nearestLimit=limit;nearestWidth=candidate.Width;}
+    if(d>limit)rejected|=1;
+    if(math.dot(point.xz-bay.Item2.xz,bay.Item3.xz)<=0)rejected|=2;
+    if(math.abs(math.dot(math.normalizesafe(MathUtils.Tangent(curve,t).xz),bay.Item3.xz))>.6f)rejected|=4;
     if(d>candidate.Width*.5f+Mod.Options.ParkingPavingMargin+2||d>=best||math.dot(point.xz-bay.Item2.xz,bay.Item3.xz)<=0||math.abs(math.dot(math.normalizesafe(MathUtils.Tangent(curve,t).xz),bay.Item3.xz))>.6f)continue;
     best=d;parent=candidate.Entity;
    }
-   if(parent==Entity.Null)throw DiagnosticException.Parking("Parking bay has no matching native aisle edge",52,i,bayDefinitions.Count);
+   if(parent==Entity.Null)throw DiagnosticException.ParkingLookup(i,bayDefinitions.Count,examined,rejected,nearest,nearestLimit,nearestWidth);
    if(bay.Item1!=Entity.Null){
     if(EntityManager.GetComponentData<CreationDefinition>(bay.Item1).m_Attached!=parent)throw DiagnosticException.Parking("Native parking parent changed during preview; recreate the preview",53,i,bayDefinitions.Count);
     continue;
@@ -277,3 +282,5 @@ public partial class ConstructionTool:ToolBaseSystem {
  }
 }
 }
+
+

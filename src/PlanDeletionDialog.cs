@@ -12,12 +12,12 @@ public partial class PlanSystem {
   return "계획도_"+System.DateTime.Now.ToString("yyyyMMdd")+"_"+number+"_"+new string(string.Join("+",names).Where(c=>!char.IsWhiteSpace(c)).ToArray());
  }
  System.Collections.Generic.List<System.Tuple<int,Entity>> deleteAllSnapshot;
- bool CanDeleteAllPlans=>Ready&&!LayoutPending&&demolitionCountdown<=0&&!deletionDialogOpen&&!NativeBusy&&Saved.Count>0;
+ bool CanDeleteAllPlans=>Ready&&!LayoutPending&&demolitionCountdown<=0&&!deletionDialogOpen&&!NativeBusy&&Saved.Any(p=>!p.Hidden);
  void ConfirmAllPlanDeletion(){
   if(!CanDeleteAllPlans)return;
   // Leave a failed/idle native preview before evaluating the plan-only policy.
   if(World.GetExistingSystemManaged<ToolSystem>()?.activeTool is ConstructionTool)Activate();
-  var snapshot=Saved.Where(p=>CanDeleteTarget(p.Info.Number)).Select(p=>System.Tuple.Create(p.Info.Number,p.Entity)).ToList();if(snapshot.Count==0){Status="AP.DeleteBuilt";Revision++;return;}
+  var snapshot=Saved.Where(p=>!p.Hidden&&CanDeleteTarget(p.Info.Number)).Select(p=>System.Tuple.Create(p.Info.Number,p.Entity)).ToList();if(snapshot.Count==0){Status="AP.DeleteBuilt";Revision++;return;}
   int generation=++deletionDialogGeneration;deleteAllSnapshot=snapshot;deletionDialogOpen=true;Revision++;
   GameManager.instance.userInterface.appBindings.ShowConfirmationDialog(new ConfirmationDialog("AP.DeleteAllPlans","AP.DeleteAllPlansMessage","Common.DIALOG_ACTION[Yes]","Common.DIALOG_ACTION[No]"),answer=>{
    if(generation!=deletionDialogGeneration)return;deletionDialogOpen=false;Revision++;
@@ -30,6 +30,15 @@ public partial class PlanSystem {
   foreach(var target in targets){var plan=Saved.Find(p=>p.Info.Number==target.Item1&&p.Entity==target.Item2);if(plan!=null&&CanDeleteTarget(target.Item1))Command("delete",target.Item1.ToString());}
   Revision++;
  }
+ // Never dispatch demolition or modify any constructed entity from this path.
+ void RemoveSavedListing(StoredPlan plan){
+  if(HasOwnedObjects(plan)||IsBuilt(plan)){
+   var state=new PlanListState{Hidden=1};
+   if(EntityManager.HasComponent<PlanListState>(plan.Entity))EntityManager.SetComponentData(plan.Entity,state);
+   else EntityManager.AddComponentData(plan.Entity,state);
+   plan.Hidden=true;
+  }else{EntityManager.DestroyEntity(plan.Entity);Saved.Remove(plan);}
+ }
  const int DraftDeletion=-2;
  int deletionDialogGeneration,deletePlanId=-1;Entity deletePlanEntity;bool deletionDialogOpen;byte[] deleteDraftSnapshot;
  bool DeletionBusy=>!Ready||LayoutPending||demolitionCountdown>0||World.GetExistingSystemManaged<ToolSystem>()?.activeTool is ConstructionTool;
@@ -38,7 +47,7 @@ public partial class PlanSystem {
   var stored=id>=0?Saved.Find(p=>p.Info.Number==id):null;
   bool draft=id==DraftDeletion&&Open&&EditingPlan<0;
   return PlanDeletionPolicy.Allowed(Ready,LayoutPending,World.GetExistingSystemManaged<ToolSystem>()?.activeTool is ConstructionTool,demolitionCountdown>0,deletionDialogOpen,
-   draft?(Boundary.Count>0||Draft!=null):stored!=null,stored!=null&&HasOwnedObjects(stored),draft?NativeCommitted:stored!=null&&IsBuilt(stored));
+   draft?(Boundary.Count>0||Draft!=null):stored!=null&&!stored.Hidden,false,draft&&NativeCommitted);
  }
  string DeletionReason(int id){
   if(!Ready)return "AP.DeleteNotReady";
@@ -47,13 +56,14 @@ public partial class PlanSystem {
   if(World.GetExistingSystemManaged<ToolSystem>()?.activeTool is ConstructionTool)return "AP.DeletePreview";
   if(deletionDialogOpen)return "AP.DeleteDialogOpen";
   var stored=id>=0?Saved.Find(p=>p.Info.Number==id):null;
-  if(stored!=null&&(HasOwnedObjects(stored)||IsBuilt(stored))||id==DraftDeletion&&NativeCommitted)return "AP.DeleteBuilt";
+  if(id==DraftDeletion&&NativeCommitted)return "AP.DeleteBuilt";
   return CanDeleteTarget(id)?"AP.DeletePlanHint":"AP.DeleteNoTarget";
  }
  bool CanDeleteCurrent=>CanDeleteTarget(CurrentDeletionTarget);
  void ResetDeletionDialog(){deletionDialogGeneration++;deletionDialogOpen=false;deletePlanId=-1;deletePlanEntity=Entity.Null;deleteDraftSnapshot=null;Revision++;}
  void ConfirmPlanDeletion(string value){
   int id=CurrentDeletionTarget;if(!string.IsNullOrEmpty(value)&&!int.TryParse(value,out id))return;
+  if(!NativeBusy&&demolitionCountdown<=0&&World.GetExistingSystemManaged<ToolSystem>()?.activeTool is ConstructionTool)Activate();
   if(!CanDeleteTarget(id))return;
   var stored=id>=0?Saved.Find(p=>p.Info.Number==id):null;
   int generation=++deletionDialogGeneration;deletePlanId=id;deletePlanEntity=stored?.Entity??Entity.Null;deleteDraftSnapshot=id==DraftDeletion?CaptureEdit():null;deletionDialogOpen=true;Revision++;
@@ -78,7 +88,7 @@ public partial class PlanSystem {
   }
   var stored=Saved.Find(p=>p.Info.Number==id);
   // A reused numeric plan ID or a city reload cannot redirect an old approval.
-  if(stored==null||stored.Entity!=entity||!EntityManager.Exists(entity)||HasOwnedObjects(stored)||IsBuilt(stored))return;
+  if(stored==null||stored.Entity!=entity||!EntityManager.Exists(entity))return;
   Command("delete",id.ToString());
  }
 }

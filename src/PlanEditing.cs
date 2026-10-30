@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -26,7 +26,7 @@ public partial class PlanSystem {
  }
  internal void InspectPlan(int id){if(!Saved.Any(p=>p.Info.Number==id))return;NativeAuditAvailable=false;SelectedPlan=id;Open=false;Focused=false;Exit();SelectCompoundInfo();Revision++;}
  void EditStored(){
-  RestoreCompoundDraft();CancelLayout();LayoutOutdated=false;Mod.Options.ParkingInOpenSpace=false;
+  CancelCompoundReplacement();RestoreCompoundDraft();CancelLayout();LayoutOutdated=false;Mod.Options.ParkingInOpenSpace=false;
   var stored=SelectedStored;if(stored==null)return;Catalog();var original=ReadEdit(stored.Entity);var d=original?.Pending??original;
   var boundary=d?.Boundary??StoredBoundary(stored);if(!Layout.Valid(boundary)){Status="AP.LegacyUneditable";return;}
   Boundary.Clear();Boundary.AddRange(boundary);Entrances.Clear();VillaConnections.Clear();Zones.Clear();Ramps.Clear();ClearRoadEdit();ZonePoints.Clear();Preview.Clear();ReplacementIndex=-1;
@@ -43,7 +43,7 @@ public partial class PlanSystem {
    LayoutOutdated=!NativeCommitted&&(parkingReset||savedAisle!=Mod.Options.AisleNetwork);
    Status=LayoutOutdated?(parkingReset?"AP.CalculationNeeded":"AP.NetworkRecalculate"):"AP.EditingSaved";
   }else{Draft=null;Mode="entrance";Status="AP.LegacyEdit";}
-  Entrance=Entrances.Count>0?(Point?)Entrances[0]:null;EntranceLength=Mod.Options.EntranceLength;Open=true;Activate();Revision++;
+  Entrance=Entrances.Count>0?(Point?)Entrances[0]:null;EntranceLength=Mod.Options.EntranceLength;Open=true;Activate();Trace.Event("plan.edit.open","id="+EditingPlan+" mode="+Mode);Revision++;
  }
  internal bool IsBuilt(StoredPlan p)=>WasConstructed(p.Entity)||p.Edit?.NativeCommitted==true;
  bool WasConstructed(Entity e)=>EntityManager.HasComponent<PlanConstructionState>(e)&&EntityManager.GetComponentData<PlanConstructionState>(e).Applied!=0;
@@ -87,7 +87,7 @@ public partial class PlanSystem {
   foreach(var detail in frontageDetails)Trace.Event("construction.frontage.missing",detail);
   Trace.Event("construction.frontage.network","missing="+missingFronts+" network="+Network("aisle").Id);
   if(missingFronts>0){Status="AP.FrontageRecalculate";return;}
-  if(Draft.ParkingAccessFailures>0){Status="AP.ParkingAccessIncomplete";return;}
+  if(!Draft.Villa&&Entrances.Count==0){Status="AP.PickEntrance";return;}
   if(Draft.RequiredAccessFailures>0){Status="AP.AccessIncomplete";return;}
   CatalogTrees();Save(true);if(EditingPlan<0)return;if(CompoundEditing){BeginCompoundReplacement();return;}
   Mode="preview";Status="AP.NativeChecking";World.GetOrCreateSystemManaged<Game.Tools.ToolSystem>().activeTool=World.GetOrCreateSystemManaged<ConstructionTool>();
@@ -96,6 +96,7 @@ public partial class PlanSystem {
  internal object StoredSummary(StoredPlan p)=>p==null?null:new{name=p.Edit?.Name,canDelete=CanDeleteTarget(p.Info.Number),deleteReason=DeletionReason(p.Info.Number),parked=p.Info.Number==occupancyPlan?ParkedCount:null,occupiedHomes=p.Info.Number==occupancyPlan?OccupiedHomes:null,parkingCapacity=p.Info.Number==occupancyPlan?LiveParkingCapacity:null,homeCapacity=p.Info.Number==occupancyPlan?LiveHomeCapacity:null,owned=OwnedObjects(p).Count,id=p.Info.Number,area=p.Info.Area,far=p.Info.Far,homes=p.Info.Homes,built=WasConstructed(p.Entity)||p.Edit?.NativeCommitted==true,buildings=p.Edit?.AppliedPlans!=null?p.Edit.AppliedPlans.Sum(plan=>plan.Parcels.Count(r=>r.Kind==0)):p.Shapes.Count(s=>s.Kind==0),parking=p.Edit?.AppliedPlans!=null?p.Edit.AppliedPlans.Sum(plan=>plan.Parcels.Sum(r=>r.ParkingSpaces)):p.Edit?.Draft?.Parcels.Sum(r=>r.ParkingSpaces),editable=Layout.Valid(StoredBoundary(p)),legacy=p.Edit==null};
 }
 }
+
 
 
 
