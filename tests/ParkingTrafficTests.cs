@@ -13,7 +13,7 @@ static class ParkingTrafficTests {
   p.Parcels[1].ParkingAlongX=false;ParkingTraffic.Validate(p,o);Check(p.ParkingAccessFailures==1,"wrong parking-decal axis is rejected");
   p=Fixture();p.Parcels[0].D=5;ParkingTraffic.Validate(p,o);Check(p.ParkingAccessFailures==1,"too narrow a maneuvering aisle is rejected");
   p=Fixture();p.Parcels[0].X=10;p.Parcels[0].W=20;ParkingTraffic.Validate(p,o);Check(p.ParkingAccessFailures==1,"missing parking-row end clearance is rejected");
-  p=Fixture();p.Parcels.Insert(0,new Parcel{Kind=1,X=0,Y=40,W=20,D=8});ParkingTraffic.Validate(p,o);Check(p.ParkingAccessFailures==1,"isolated parking aisle cannot reach the site entrance");
+  p=Fixture();p.Parcels.Insert(0,new Parcel{Kind=1,X=0,Y=40,W=20,D=8});ParkingTraffic.Validate(p,o);Check(p.ParkingAccessFailures==1,"isolated parking aisle cannot reach the site entrance"); Check(p.ParkingConnections[0].FailureFlags==8,"diagnostic distinguishes clear but disconnected port"); Check(PlanDiagnostics.Evidence(p,out int evidenceTotal)[0]["flags"]==8&&evidenceTotal==1,"parking failure flags included in bounded evidence"); Check(!Newtonsoft.Json.JsonConvert.SerializeObject(p.ParkingConnections[0]).Contains("FailureFlags"),"diagnostic flags excluded from saved plan JSON");
   p=Fixture();p.Parcels.Insert(0,new Parcel{Kind=1,X=0,Y=40,W=20,D=8});p.Parcels.Add(new Parcel{Kind=1,X=10,Y=28,W=2,D=12});ParkingTraffic.Validate(p,o);Check(p.ParkingAccessFailures==1,"two-metre pinch cannot pass the configured three-metre corridor");
   p=Fixture();p.Parcels.RemoveAt(0);ParkingTraffic.Validate(p,o);Check(p.ParkingAccessFailures==1,"parking without any vehicle network is rejected");
   var site=new[]{new Point(0,0),new Point(160,0),new Point(160,275),new Point(0,325)};

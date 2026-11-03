@@ -1,4 +1,6 @@
 {
+  "AP.Option.GenerateSurfaceParking": "지상 주차장 생성 (판상형 아파트)",
+  "AP.Desc.GenerateSurfaceParking": "끄면 계획도의 주차면을 생성하지 않습니다. 건물 진입 도로와 보행로는 유지되며, 선택한 에셋 자체에 포함된 주차장은 바뀌지 않습니다.",
   "AP.ReflowNoSpace": "주변 유휴부지에서 건물과 연결 도로가 함께 들어갈 자리를 찾지 못했습니다.",
   "AP.ReflowDone": "건물과 연결 도로를 다시 계획했습니다. 실제 건설 미리보기에서 확인하세요.",
   "AP.BuildingEditor": "개별 동 편집",

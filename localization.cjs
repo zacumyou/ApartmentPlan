@@ -1,4 +1,6 @@
 const fs=require('fs'),path=require('path');const root=__dirname;const en={},ko={};function add(k,e,v){en[k]=e;ko[k]=v}
+add('AP.Option.GenerateSurfaceParking','Generate surface parking (slab apartments)','지상 주차장 생성 (판상형 아파트)');
+add('AP.Desc.GenerateSurfaceParking','Turn off to omit generated parking bays. Building access roads and paths remain. Parking built into selected assets is unchanged.','끄면 계획도의 주차면을 생성하지 않습니다. 건물 진입 도로와 보행로는 유지되며, 선택한 에셋 자체에 포함된 주차장은 바뀌지 않습니다.');
 add('AP.ReflowNoSpace','No safe space and connected access road could be found around this building.','주변 유휴부지에서 건물과 연결 도로가 함께 들어갈 자리를 찾지 못했습니다.');
 add('AP.ReflowDone','Building and access road replanned. Check the construction preview.','건물과 연결 도로를 다시 계획했습니다. 실제 건설 미리보기에서 확인하세요.');
 

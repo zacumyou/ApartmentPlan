@@ -26,8 +26,8 @@ try {
  Copy-Item README.md,TRANSLATING.md,NOTICE.md package -Force
  $suffix=if($localTimingEnabled){"-local-diagnostics"}else{""}
  if($localTimingEnabled){Set-Content package/LOCAL-DIAGNOSTICS-DO-NOT-PUBLISH.txt "Local stage timing enabled. Rebuild with -PublicRelease before public release."}elseif(Test-Path package/LOCAL-DIAGNOSTICS-DO-NOT-PUBLISH.txt){Remove-Item -LiteralPath package/LOCAL-DIAGNOSTICS-DO-NOT-PUBLISH.txt}
- Compress-Archive -Path package/* -DestinationPath "ApartmentPlan-0.1.118$suffix.zip" -Force
- Write-Output 'ApartmentPlan 0.1.118 built and packaged. Game runtime not verified.'
+ Compress-Archive -Path package/* -DestinationPath "ApartmentPlan-0.1.120$suffix.zip" -Force
+ Write-Output 'ApartmentPlan 0.1.120 built and packaged. Game runtime not verified.'
 } finally {Pop-Location}
 
 

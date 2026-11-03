@@ -4,6 +4,7 @@ using System.Linq;
 namespace ApartmentPlan {
 public sealed class ParkingConnection {
  public Parcel Bay,Aisle;public int EntrySide;public bool Valid;
+ [Newtonsoft.Json.JsonIgnore] public int FailureFlags;
  public string Failure="";public List<Point> Ports=new List<Point>();public List<Point> Route=new List<Point>();
 }
 // Planning topology and clearance only. This does not create native CarLane,
@@ -43,7 +44,7 @@ public static class ParkingTraffic {
     var ports=new List<Point>();bool connected=true;int middle=-1;
     for(int i=0;i<bay.ParkingSpaces;i++){
      var p=h?new Point(bay.X+(i+.5)*bay.W/bay.ParkingSpaces,aisle.Y+aisle.D/2):new Point(aisle.X+aisle.W/2,bay.Y+(i+.5)*bay.D/bay.ParkingSpaces);
-     int x=(int)Math.Floor((p.X-x0)/step),y=(int)Math.Floor((p.Y-y0)/step);if(x<0||y<0||x>=nx||y>=ny||parent[y*nx+x]==-2){connected=false;break;}
+     int x=(int)Math.Floor((p.X-x0)/step),y=(int)Math.Floor((p.Y-y0)/step);if(x<0||y<0||x>=nx||y>=ny||parent[y*nx+x]==-2){result.FailureFlags|=seed<0?1:0;result.FailureFlags|=x<0||y<0||x>=nx||y>=ny?2:!clear(x,y)?4:8;connected=false;break;}
      ports.Add(p);if(i==bay.ParkingSpaces/2)middle=y*nx+x;
     }
     if(!connected||ports.Count==0){result.Failure="Aisle disconnected or vehicle passage too narrow";continue;}

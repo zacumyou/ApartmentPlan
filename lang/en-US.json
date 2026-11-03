@@ -1,4 +1,6 @@
 {
+  "AP.Option.GenerateSurfaceParking": "Generate surface parking (slab apartments)",
+  "AP.Desc.GenerateSurfaceParking": "Turn off to omit generated parking bays. Building access roads and paths remain. Parking built into selected assets is unchanged.",
   "AP.ReflowNoSpace": "No safe space and connected access road could be found around this building.",
   "AP.ReflowDone": "Building and access road replanned. Check the construction preview.",
   "AP.BuildingEditor": "Edit building",

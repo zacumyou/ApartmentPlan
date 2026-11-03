@@ -81,6 +81,7 @@ public sealed class LayoutOptions {
  internal System.Threading.CancellationToken Cancellation{get;set;}
  public bool RequireBuildingRoad=true;public int ParkingOrientation=0;public double ParkingEndClearance=3,VehiclePassageWidth=3;
  public double PerimeterPathSpacing=80,FrontParkingCoverage=.2,BoundaryGreenMargin=4,ParkingPavingMargin=1,BuildingStagger=2,MaxAccessLength=40,FrontParkingDistance=40,VerticalPreference=.38,SearchStep=2;
+ public bool GenerateSurfaceParking=true;
  public bool RequireFrontParking=true,AllowRingCourts=true,AllowOpenCourts=true,AllowParallelPairs=true;public int MinFrontParkingSpaces=4,MaxRingCourts=2,MaxBuildings=100;
  // Runtime capabilities of the selected native networks, not a user override.
  public bool MainRoadPedestrian,AisleRoadPedestrian;

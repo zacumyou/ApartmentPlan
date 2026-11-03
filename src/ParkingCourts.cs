@@ -37,7 +37,7 @@ internal sealed partial class ResidentialLayout {
  }
  Block ParkingCourt(double x,double y,Asset bar,Asset cap,string kind,int lanes,bool mirror,bool rotate,bool crossParking=false,bool wideEntrance=false){
   using(var timingScope=LayoutFunctionTiming.Start(o.FunctionTiming,"ParkingCourt")){
-  if(o.ContinuousFrontage)return ConnectedFrontageCourt(x,y,bar,cap,kind,lanes,mirror,rotate,crossParking,wideEntrance);
+  if(o.ContinuousFrontage||!o.GenerateSurfaceParking)return ConnectedFrontageCourt(x,y,bar,cap,kind,lanes,mirror,rotate,crossParking,wideEntrance);
   double length=Math.Max(bar.Width,bar.Depth),depth=Math.Min(bar.Width,bar.Depth);
   double cd=Math.Min(cap.Width,cap.Depth),cl=Math.Max(cap.Width,cap.Depth);
   // A selected path's width is not a compulsory strip along every building.
@@ -203,7 +203,7 @@ internal sealed partial class ResidentialLayout {
   if(assets.Count==0)return;
   var shapes=new Dictionary<(string,Asset,Asset,int,int,bool,bool,bool),Parcel>();
   var orderedAssets=assets;
-  var crossOptions=o.ParkingOrientation==2?new[]{true,false}:new[]{false,true};
+  var crossOptions=!o.GenerateSurfaceParking?new[]{false}:o.ParkingOrientation==2?new[]{true,false}:new[]{false,true};
   var entranceOptions=o.ContinuousFrontage&&o.WideParkingAisle>o.ParkingAisle?new[]{true,false}:new[]{false};
   foreach(var kind in new[]{"ring","u","pair","single"}){
    if(o.BuildingPattern!=0&&(kind=="ring"||kind=="u"))continue;
@@ -221,7 +221,7 @@ internal sealed partial class ResidentialLayout {
      if(rotation&&!o.MixedDirections&&o.BuildingPattern==0)continue;
       if(o.BuildingPattern==1&&(rotation?a.Depth:a.Width)<(rotation?a.Width:a.Depth)-.01||o.BuildingPattern==2&&(rotation?a.Width:a.Depth)<(rotation?a.Depth:a.Width)-.01)continue;
       if(placed)break;
-      int lanes=o.WideSlabParking&&kind!="single"?Math.Min(o.MaxParkingAisles,Math.Max(1,(int)Math.Ceiling(a.Homes*2*o.ParkingPerHome*o.SurfaceParkingShare/(Math.Max(a.Width,a.Depth)/o.BayWidth*2)))):1;
+      int lanes=o.GenerateSurfaceParking&&o.WideSlabParking&&kind!="single"?Math.Min(o.MaxParkingAisles,Math.Max(1,(int)Math.Ceiling(a.Homes*2*o.ParkingPerHome*o.SurfaceParkingShare/(Math.Max(a.Width,a.Depth)/o.BayWidth*2)))):1;
       for(int lane=lanes;lane>=1&&!placed;lane--)for(int reflection=0;reflection<2&&!placed;reflection++)foreach(bool cross in crossOptions){
        if(placed)break;if(o.ParkingOrientation==1&&cross)continue;
        foreach(bool wideEntrance in entranceOptions){

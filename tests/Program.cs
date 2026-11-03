@@ -10,7 +10,27 @@ class Program {
   ((Math.Abs(a.X+a.W-b.X)<.01||Math.Abs(b.X+b.W-a.X)<.01)&&Math.Min(a.Y+a.D,b.Y+b.D)-Math.Max(a.Y,b.Y)>.01)||
   ((Math.Abs(a.Y+a.D-b.Y)<.01||Math.Abs(b.Y+b.D-a.Y)<.01)&&Math.Min(a.X+a.W,b.X+b.W)-Math.Max(a.X,b.X)>.01);
  public sealed class ReplayInput {public List<Point> Boundary {get;set;} public List<Point> Entrances {get;set;} public List<Asset> Assets {get;set;} public LayoutOptions Options {get;set;} public List<Parcel> Ramps {get;set;} public List<ManualZone> Zones {get;set;} public List<ManualRoad> Roads {get;set;}}
- static void Main(string[] args){if(args.Length>2&&args[0]=="--issue-replay"){
+ static void SurfaceParkingTest(){
+ var site=new[]{new Point(0,0),new Point(160,0),new Point(160,275),new Point(0,325)};
+ var entries=new[]{new Point(60,0),new Point(120,287.5)};
+ var assets=new[]{new Asset{Id="L",Width=40,Depth=12,Height=45,Homes=80},new Asset{Id="S",Width=24,Depth=12,Height=30,Homes=40}};
+ Check(Newtonsoft.Json.JsonConvert.DeserializeObject<LayoutOptions>("{}").GenerateSurfaceParking,"old options default to parking enabled");
+ foreach(bool enabled in new[]{true,false}){
+ var o=new LayoutOptions{GenerateSurfaceParking=enabled,ParkingInOpenSpace=true,ContinuousFrontage=true};
+ var roundtrip=Newtonsoft.Json.JsonConvert.DeserializeObject<LayoutOptions>(Newtonsoft.Json.JsonConvert.SerializeObject(o));
+ Check(roundtrip.GenerateSurfaceParking==enabled,"parking switch roundtrip");
+ var p=Layout.Generate(site,entries,assets,roundtrip,null,null);
+ Check(p.Parcels.Any(v=>v.Kind==0),"buildings generated");
+ Check(p.Parcels.Any(v=>v.Kind==2)==enabled,"parking generation follows switch including infill");
+ Check(p.Parcels.Where(v=>v.Kind==0).All(v=>v.Frontage!=null)&&p.RequiredAccessFailures==0,"building frontage retained");
+ if(!enabled)Check(p.Courts.All(c=>c.Parking.Count==0&&c.Capacity==0)&&p.ParkingConnections.Count==0,"no stale parking metadata");
+ Verify(p);
+ System.IO.Directory.CreateDirectory("docs/parking-0120");
+ System.IO.File.WriteAllText("docs/parking-0120/"+(enabled?"on":"off")+".json",Newtonsoft.Json.JsonConvert.SerializeObject(p));
+ Console.WriteLine("parking="+enabled+" buildings="+p.Parcels.Count(v=>v.Kind==0)+" bays="+p.Parcels.Count(v=>v.Kind==2));
+ }}
+ static void Main(string[] args){if(args.Length>0&&args[0]=="--surface-parking"){SurfaceParkingTest();return;}
+ if(args.Length>2&&args[0]=="--issue-replay"){
  var input=Newtonsoft.Json.JsonConvert.DeserializeObject<ReplayInput>(System.IO.File.ReadAllText(args[1]));
  var watch=System.Diagnostics.Stopwatch.StartNew();
  try{var result=Layout.Generate(input.Boundary,input.Entrances,input.Assets,input.Options,input.Ramps,input.Zones,input.Roads);var json=Newtonsoft.Json.JsonConvert.SerializeObject(result);System.IO.File.WriteAllText(args[2],json);Console.WriteLine("ms="+watch.ElapsedMilliseconds+" buildings="+result.Parcels.Count(p=>p.Kind==0)+" hash="+Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(json))));}

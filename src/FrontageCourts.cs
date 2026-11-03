@@ -6,12 +6,13 @@ internal sealed partial class ResidentialLayout {
  // Actual prefab +Z frontage gets a continuous vehicle street. Parking is on
  // the far side of that street, never between the lot and its access road.
  Block ConnectedFrontageCourt(double x,double y,Asset bar,Asset cap,string kind,int lanes,bool mirror,bool rotate,bool cross,bool wideEntrance=false){
+  if(!o.GenerateSurfaceParking){lanes=1;cross=false;}
   double length=bar.Width,depth=bar.Depth,cd=cap.Depth,cl=cap.Width;
   double aisle=Snap((wideEntrance?Math.Max(o.ParkingAisle,o.WideParkingAisle):o.ParkingAisle)+2*o.ParkingPavingMargin),bay=Snap(o.BayDepth),island=Snap(o.ParkingIsland);
   bool side=kind=="u"||kind=="ring",ring=kind=="ring",single=kind=="single";
   double stagger=o.AlignBlocks?Snap(o.BuildingStagger):0;
   double entranceWidth=wideEntrance?Snap(Math.Max(o.ParkingAisle,o.WideParkingAisle)+2*o.ParkingPavingMargin):aisle;
-  double baseCourt=(lanes+1)*aisle+lanes*(2*bay+island)+(entranceWidth-aisle);
+  double baseCourt=(lanes+1)*aisle+lanes*(o.GenerateSurfaceParking?2*bay+island:0)+(entranceWidth-aisle);
   double court=Math.Max(baseCourt,Math.Max(o.ParallelGap,side?cl:0));
   if(cross)court=Math.Max(court,2*aisle+2*o.ParkingEndClearance+o.MinFrontParkingSpaces*o.BayWidth);
   court=Snap(court); // parking pitch must not move lot edges between raster cells
@@ -19,7 +20,7 @@ internal sealed partial class ResidentialLayout {
   // to drivable aisles, bounded by the available native network widths.
   var streetWidths=Enumerable.Repeat(aisle,lanes+1).ToArray();
   streetWidths[0]=entranceWidth;
-  if(!single&&!cross){
+  if(o.GenerateSurfaceParking&&!single&&!cross){
    double extra=court-baseCourt,maximum=Snap(Math.Max(o.ParkingAisle,o.WideParkingAisle)+2*o.ParkingPavingMargin);
    if(extra>streetWidths.Sum(w=>maximum-w)+.001)return null;
    var order=Enumerable.Range(0,lanes+1).OrderBy(i=>Math.Abs(i-lanes/2.0)).ToArray();
@@ -33,7 +34,7 @@ internal sealed partial class ResidentialLayout {
   double firstWidth=streetWidths[0],lastWidth=streetWidths[lanes];
   double start=side?cd+Math.Max(o.Gap,aisle):0,right=start+length+stagger;
   double rightRoad=ring?right+o.Gap-aisle:right-aisle,leftRoad=side?cd:0;
-  double width=ring?right+o.Gap+cd:right,height=single?depth+firstWidth+bay:2*depth+court;
+  double width=ring?right+o.Gap+cd:right,height=single?depth+firstWidth+(o.GenerateSurfaceParking?bay:0):2*depth+court;
   if(length<aisle+2*o.ParkingEndClearance||cd<=0)return null;
   var b=new Block{MaxConnection=o.MaxAccessLength,LandscapeRemainder=true};
   Parcel Part(double u,double v,double w,double h,int k){var p=new Parcel{X=u,Y=v,W=w,D=h,Kind=k,ParkingAlongX=true};b.Pieces.Add(p);return p;}
@@ -58,8 +59,9 @@ internal sealed partial class ResidentialLayout {
   double parkingStart=Math.Max(side?leftRoad+aisle:0,leftRoad+o.ParkingEndClearance);
   double parkingEnd=Math.Min(single?right:rightRoad,roadEnd-o.ParkingEndClearance);
   double span=Math.Floor((parkingEnd-parkingStart)/o.BayWidth)*o.BayWidth;
-  if(span<o.MinFrontParkingSpaces*o.BayWidth)return null;
+  if(o.GenerateSurfaceParking&&span<o.MinFrontParkingSpaces*o.BayWidth)return null;
   void Bays(double u,double v,double w,double h,bool along){var p=Part(u,v,w,h,2);p.ParkingAlongX=along;p.ParkingSpaces=(int)Math.Round((along?w:h)/o.BayWidth);}
+  if(o.GenerateSurfaceParking){
   if(single)Bays(parkingStart,depth+firstWidth,span,bay,true);
   else if(cross){
    double run=Math.Floor((court-firstWidth-lastWidth-2*o.ParkingEndClearance)/o.BayWidth)*o.BayWidth;int count=0;
@@ -84,13 +86,14 @@ internal sealed partial class ResidentialLayout {
     if(i<lanes-1)Street(leftRoad,at,roadEnd-leftRoad,streetWidths[i+1],true);at+=streetWidths[i+1];
    }
   }
+  }
   b.Gate=new Point(right-aisle/2,depth+firstWidth/2);b.Bounds=new Parcel{W=width,D=height};
   // End clearance and fractional pitch remainder belong to the parking apron,
   // including courts open at one end. Keep intentional landscape islands.
   foreach(var row in b.Pieces.Where(p=>p.Kind==2))b.Paving.Add(row.ParkingAlongX?
    new Parcel{X=side?leftRoad+aisle:0,Y=row.Y,W=(single?right:rightRoad)-(side?leftRoad+aisle:0),D=row.D}:
    new Parcel{X=row.X,Y=depth+firstWidth,W=row.W,D=court-firstWidth-lastWidth});
-  if(!single&&o.ParkingIsland<=0)b.Paving.Add(new Parcel{Kind=8,X=leftRoad,Y=depth,W=roadEnd-leftRoad,D=court});
+  if(o.GenerateSurfaceParking&&!single&&o.ParkingIsland<=0)b.Paving.Add(new Parcel{Kind=8,X=leftRoad,Y=depth,W=roadEnd-leftRoad,D=court});
   Point TransformPoint(Point p){double u=mirror?width-p.X:p.X;return new Point(x+(rotate?p.Y:u),y+(rotate?u:p.Y));}
   void Transform(Parcel p){double u=mirror?width-p.X-p.W:p.X,v=p.Y,w=p.W,h=p.D;p.X=x+(rotate?v:u);p.Y=y+(rotate?u:v);p.W=rotate?h:w;p.D=rotate?w:h;if(rotate)p.ParkingAlongX=!p.ParkingAlongX;}
   b.Gate=TransformPoint(b.Gate);foreach(var r in b.StreetAxes.Values)r.Points=r.Points.Select(TransformPoint).ToList();

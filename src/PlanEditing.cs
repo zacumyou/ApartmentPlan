@@ -26,7 +26,7 @@ public partial class PlanSystem {
  }
  internal void InspectPlan(int id){if(!Saved.Any(p=>p.Info.Number==id))return;NativeAuditAvailable=false;SelectedPlan=id;Open=false;Focused=false;Exit();SelectCompoundInfo();Revision++;}
  void EditStored(){
-  CancelCompoundReplacement();RestoreCompoundDraft();CancelLayout();LayoutOutdated=false;Mod.Options.ParkingInOpenSpace=false;
+  CancelCompoundReplacement();RestoreCompoundDraft();CancelLayout();LayoutOutdated=false;Mod.Options.GenerateSurfaceParking=true;Mod.Options.ParkingInOpenSpace=false;
   var stored=SelectedStored;if(stored==null)return;Catalog();var original=ReadEdit(stored.Entity);var d=original?.Pending??original;
   var boundary=d?.Boundary??StoredBoundary(stored);if(!Layout.Valid(boundary)){Status="AP.LegacyUneditable";return;}
   Boundary.Clear();Boundary.AddRange(boundary);Entrances.Clear();VillaConnections.Clear();Zones.Clear();Ramps.Clear();ClearRoadEdit();ZonePoints.Clear();Preview.Clear();ReplacementIndex=-1;

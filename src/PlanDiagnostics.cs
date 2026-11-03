@@ -13,7 +13,7 @@ internal static class PlanDiagnostics {
   total+=p.AccessEvidenceTotal;foreach(var evidence in p.AccessEvidence){if(result.Count>=24)break;result.Add(new Dictionary<string,int>(evidence));}
   int ordinal=0;foreach(var c in p.ParkingConnections){ordinal++;if(c.Valid)continue;total++;if(result.Count>=24)continue;
    int reason=c.Failure=="No vehicle network"?81:c.Failure=="Parking axis or stall dimensions inconsistent"?82:c.Failure=="No full-width aisle with end clearance"?83:c.Failure=="Aisle disconnected or vehicle passage too narrow"?84:85;
-   result.Add(new Dictionary<string,int>{{"reason",reason},{"ordinal",ordinal},{"widthCm",Cm(c.Bay?.W??0)},{"depthCm",Cm(c.Bay?.D??0)},{"connected",c.Bay?.ParkingSpaces??0},{"edges",c.Ports.Count}});
+   result.Add(new Dictionary<string,int>{{"reason",reason},{"flags",c.FailureFlags},{"ordinal",ordinal},{"widthCm",Cm(c.Bay?.W??0)},{"depthCm",Cm(c.Bay?.D??0)},{"connected",c.Bay?.ParkingSpaces??0},{"edges",c.Ports.Count}});
   }return result;
  }
  static int Cm(double value)=>double.IsNaN(value)||double.IsInfinity(value)?0:(int)Math.Max(0,Math.Min(int.MaxValue,Math.Round(value*100)));
