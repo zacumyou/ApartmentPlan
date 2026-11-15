@@ -5,17 +5,27 @@ using Game.SceneFlow;
 using UnityEngine;
 namespace ApartmentPlan {
 public partial class PlanOverlay {
- internal sealed class NameLabel {public string text;public float x,y,size;public int index,token;public bool editable;}
+ internal sealed class NameLabel {public string text;public float x,y,size,scale;public int index,token;public bool editable;}
  readonly List<NameLabel> labels=new List<NameLabel>();
  readonly Dictionary<string,Asset> labelAssets=new Dictionary<string,Asset>(StringComparer.Ordinal);
  readonly Dictionary<string,string> labelNames=new Dictionary<string,string>(StringComparer.Ordinal);
  readonly List<Rect> labelRects=new List<Rect>();
  int labelCatalogRevision=-1,labelToken;Plan labelDraft;float nextLabelUpdate;bool updateLabels;
  internal string LabelJson {get;private set;}="[]";
- void BeginLabels(){updateLabels=UnityEngine.Time.unscaledTime>=nextLabelUpdate;if(updateLabels){nextLabelUpdate=UnityEngine.Time.unscaledTime+1f/30;labels.Clear();labelRects.Clear();}}
+ Matrix4x4 labelView,labelProjection;int labelRevision=-1,labelScreenWidth,labelScreenHeight;float nextLabelRefresh;
+ void BeginLabels(){
+  var s=World.GetExistingSystemManaged<PlanSystem>();var camera=Camera.main;float now=UnityEngine.Time.unscaledTime;
+  bool changed=camera==null||s==null||labelRevision!=s.Revision||labelScreenWidth!=Screen.width||labelScreenHeight!=Screen.height||labelView!=camera.worldToCameraMatrix||labelProjection!=camera.projectionMatrix;
+  updateLabels=now>=nextLabelUpdate&&(changed||now>=nextLabelRefresh);
+  if(!updateLabels)return;
+  nextLabelUpdate=now+1f/30;nextLabelRefresh=now+.5f;
+  labelRevision=s?.Revision??-1;labelScreenWidth=Screen.width;labelScreenHeight=Screen.height;
+  if(camera!=null){labelView=camera.worldToCameraMatrix;labelProjection=camera.projectionMatrix;}
+  labels.Clear();labelRects.Clear();
+ }
  void EndLabels(){if(measuring)submittedCount+=labels.Count;if(updateLabels){var json=Newtonsoft.Json.JsonConvert.SerializeObject(labels);if(json!=LabelJson)LabelJson=json;}}
  protected override void OnDestroy(){ClearLabels();base.OnDestroy();}
- internal void ClearLabels(){labels.Clear();labelNames.Clear();labelDraft=null;labelToken++;LabelJson="[]";}
+ internal void ClearLabels(){labels.Clear();labelNames.Clear();labelDraft=null;labelToken++;labelRevision=-1;nextLabelRefresh=0;LabelJson="[]";}
  internal bool PickLabel(string value,Plan current,out Point point){
   point=default;var parts=(value??"").Split('|');
   if(current==null||current!=labelDraft||parts.Length!=2||!int.TryParse(parts[0],out int token)||token!=labelToken||!int.TryParse(parts[1],out int index)||index<0||index>=current.Parcels.Count)return false;
@@ -44,15 +54,16 @@ public partial class PlanOverlay {
    if(!string.IsNullOrEmpty(asset.NameKey)&&GameManager.instance.localizationManager.activeDictionary.TryGetValue(asset.NameKey,out var localized)&&!string.IsNullOrWhiteSpace(localized))name=localized;
    if(string.IsNullOrWhiteSpace(name))continue;
    if(!labelNames.TryGetValue(name,out var wrapped)){wrapped=PlanLabelText.Wrap(name);if(labelNames.Count>=128)labelNames.Clear();labelNames[name]=wrapped;}
-   float size=Mathf.Clamp(Screen.height/60f,16,24)*.85f,width=0;var lines=wrapped.Split('\n');
+   float scale=.85f*.9f;float size=Mathf.Clamp(Screen.height/60f,16,24)*.85f,width=0;var lines=wrapped.Split('\n');
    foreach(var line in lines){float em=0;foreach(char c in line)em+=c<128?.58f:1;width=Mathf.Max(width,em*size);}
-   var rect=new Rect(screen.x-width/2-8,screen.y-lines.Length*size*.525f-5,width+16,lines.Length*size*1.05f+10);
+   var rect=new Rect(screen.x-(width/2+8)*scale,screen.y-(lines.Length*size*.525f+5)*scale,(width+16)*scale,(lines.Length*size*1.05f+10)*scale);
    bool overlap=false;foreach(var used in labelRects)if(used.Overlaps(rect)){overlap=true;break;}if(overlap)continue;labelRects.Add(rect);
-   labels.Add(new NameLabel{text=wrapped,x=(float)Math.Round(screen.x/Screen.width,4),y=(float)Math.Round(1-screen.y/Screen.height,4),size=size/Screen.height,index=index,token=labelToken,editable=s.Open&&s.Mode=="replace"&&plan==s.Draft&&!s.LayoutPending});
+   labels.Add(new NameLabel{text=wrapped,x=(float)Math.Round(screen.x/Screen.width,4),y=(float)Math.Round(1-screen.y/Screen.height,4),size=size/Screen.height,scale=scale,index=index,token=labelToken,editable=s.Open&&s.Mode=="replace"&&plan==s.Draft&&!s.LayoutPending});
 
   }
  }
 }
 }
+
 
 

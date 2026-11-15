@@ -48,6 +48,9 @@ public partial class PlanSystem {
   if(buildings)foreach(var step in ScanBuildings())yield return step;
   foreach(var step in ScanNetworks())yield return step;
   foreach(var step in ScanParkingDecal())yield return step;
+  // Keep the requested prefab ID even when the optional asset is not installed.
+  // A later normal game load can resolve a subscribed copy by the same name.
+  if(string.IsNullOrWhiteSpace(Mod.Options.TowerParkingAsset)){Mod.Options.TowerParkingAsset="CSKRUndergroundParkingEntrance01";Mod.Options.ApplyAndSave();}
   ScanTowerSurfaces();ApplyNetworkPreferences();
  }
  IEnumerable<bool> ScanBuildings(){

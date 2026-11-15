@@ -64,11 +64,13 @@ public partial class PlanOverlay:GameSystemBase {
    var adjusted=lot.PlacementOutline??full;
    float3 W(Point q){var w=plan.World(q);return new float3((float)w.X,elevation+.03f,(float)w.Y);}
    void Fill(Point[] q,float alpha){var color=colors[0];color.a=alpha;if(measuring)submittedCount++;buffer.DrawLine(color,color,0,OverlayRenderSystem.StyleFlags.Projected,new Line3.Segment(W((q[0]+q[1])*.5),W((q[2]+q[3])*.5)),(float)(q[1]-q[0]).Length,new float2(0));}
-   Fill(full,.32f);Fill(adjusted,.12f);
+   Fill(full,.32f);if(lot.PlacementOutline!=null)Fill(adjusted,.12f);
+   // One segment per side, not one draw submission per 1.2m dash.
+   // Tiny lots retain their fill but omit subpixel border detail.
+   if(!DetailVisible((float)Math.Min(lot.W,lot.D),new float3((float)world.X,elevation,(float)world.Y),12))continue;
    var border=colors[0];border.a=1;
-   for(int i=0;i<adjusted.Length;i++){var a=adjusted[i];var delta=adjusted[(i+1)%adjusted.Length]-a;double length=delta.Length;
-    for(double t=0;t<length;t+=1.2){var b=a+delta*(Math.Min(length,t+.35)/length);var start=a+delta*(t/length);if(measuring)submittedCount++;buffer.DrawLine(border,border,0,OverlayRenderSystem.StyleFlags.Projected,new Line3.Segment(W(start),W(b)),.22f,new float2(0));}
-   }
+   for(int i=0;i<adjusted.Length;i++){if(measuring)submittedCount++;buffer.DrawLine(border,border,0,OverlayRenderSystem.StyleFlags.Projected,new Line3.Segment(W(adjusted[i]),W(adjusted[(i+1)%adjusted.Length])),.22f,new float2(0));}
+
   }
  }
  void DrawTrees(OverlayRenderSystem.Buffer buffer,System.Collections.Generic.List<PlannedTree> trees,PlanSystem s,float distance){

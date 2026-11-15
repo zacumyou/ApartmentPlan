@@ -23,6 +23,7 @@ public static class ConstructionGraph {
     var d=other.B-other.A;double t=Math.Max(0,Math.Min(1,SiteFrame.Dot(p-other.A,d)/SiteFrame.Dot(d,d)));var q=other.A+d*t;double distance=(q-p).Length;
     // Near contact still needs a split and shared node. The short-edge contraction below welds it.
     if(distance<.03){target=other;join=q;best=distance;break;}
+    if(plan.Villa&&e.Use!="pedestrian"){if(!ForwardJoin(e,p,other,other.Width/2+2,out q))continue;distance=(q-p).Length;}
     if(SiteFrame.Dot(q-p,outward)<-.001||distance>other.Width/2+2||distance>=best)continue;
     // Do not turn neighbouring parallel aisles into diagonal roads.
     if(e.Use!="pedestrian"&&Math.Abs(Layout.Cross(e.B-e.A,d))/((e.B-e.A).Length*d.Length)<.15&&t>.001&&t<.999)continue;
@@ -72,12 +73,29 @@ public static class ConstructionGraph {
    result.Remove(edge);welded=true;break;
   }}
   MergeStraight(result);
-  if(!plan.Tower&&!plan.VillaExistingRoadsOnly)JoinRibbonComponents(result);
+  if(!plan.Tower&&!plan.VillaExistingRoadsOnly)JoinRibbonComponents(result,plan.Villa);
+  if(!plan.Tower&&!plan.Villa)RemoveCoveredJunctionStubs(plan,result);
   return result;
+ }
+ // Extend the source tangent to the target centreline, never project sideways.
+ // A wide ribbon alone is not evidence that parallel streets should be joined.
+ static bool ForwardJoin(ConstructionEdge source,Point endpoint,ConstructionEdge target,double maximum,out Point join){
+  join=default;var outward=(endpoint-source.A).Length<.001?source.A-source.B:source.B-source.A;
+  var direction=VillaGeometry.Unit(outward);var span=target.B-target.A;double cross=Layout.Cross(direction,span);
+  if(Math.Abs(cross)<.000001){
+   if(Math.Abs(Layout.Cross(direction,target.A-endpoint))>.02)return false;
+   join=VillaGeometry.Nearest(endpoint,target.A,target.B);
+  }else{
+   double travel=Layout.Cross(target.A-endpoint,span)/cross;
+   double t=Layout.Cross(target.A-endpoint,direction)/cross;
+   if(travel<0||t<0||t>1)return false;join=target.A+span*t;
+  }
+  double distance=(join-endpoint).Length;
+  return distance>.000001&&distance<=maximum&&SiteFrame.Dot(join-endpoint,direction)>0;
  }
  // Join separate vehicle components only where an endpoint already lies in
  // another road ribbon. This does not bridge unrelated roads across empty land.
- static void JoinRibbonComponents(List<ConstructionEdge> edges){
+ static void JoinRibbonComponents(List<ConstructionEdge> edges,bool preserveHeading){
   while(true){
    var roads=edges.Where(e=>e.Use!="pedestrian").ToList();
    var incident=new Dictionary<string,List<int>>();
@@ -89,8 +107,8 @@ public static class ConstructionGraph {
    if(count<2)return;
    ConstructionEdge source=null,target=null;Point from=default,to=default;double best=double.MaxValue;
    for(int i=0;i<roads.Count;i++)foreach(var p in new[]{roads[i].A,roads[i].B})for(int j=0;j<roads.Count;j++){
-    if(component[i]==component[j])continue;var e=roads[j];var d=e.B-e.A;double length2=SiteFrame.Dot(d,d);if(length2<1e-8)continue;
-    double t=SiteFrame.Dot(p-e.A,d)/length2;if(t<0||t>1)continue;var q=e.A+d*t;double gap=(q-p).Length;
+    if(component[i]==component[j]||preserveHeading&&incident[Key(p)].Count!=1)continue;var e=roads[j];var d=e.B-e.A;double length2=SiteFrame.Dot(d,d);if(length2<1e-8)continue;
+    Point q;if(preserveHeading){if(!ForwardJoin(roads[i],p,e,e.Width/2+.03,out q))continue;}else{double t=SiteFrame.Dot(p-e.A,d)/length2;if(t<0||t>1)continue;q=e.A+d*t;}double gap=(q-p).Length;
     if(gap<=.000001||gap>e.Width/2+.03||gap>=best)continue;
     source=roads[i];target=e;from=p;to=q;best=gap;
    }
@@ -101,6 +119,48 @@ public static class ConstructionGraph {
    else{edges.Add(new ConstructionEdge{A=to,B=target.B,Use=target.Use,Width=target.Width});target.B=to;}
    edges.Add(new ConstructionEdge{A=from,B=to,Use=source.Use,Width=source.Width});
   }
+ }
+ // Remove only a leaf wholly covered by a straight through-road of the same
+ // role/width. Never weld two junctions or move an existing branch endpoint.
+ internal static void RemoveCoveredJunctionStubs(Plan plan,List<ConstructionEdge> edges){
+  bool removed=false;
+  var curved=plan.Routes.Concat(plan.ConstructionRoutes).Where(r=>r.Curves?.Count>0).ToArray();
+  foreach(var stub in edges.ToArray()){
+   if(stub.Use!="aisle"&&stub.Use!="aisleWide")continue;
+   double length=(stub.B-stub.A).Length;if(length<.1||length>stub.Width/2-.01)continue;
+   var ia=Incident(edges,stub.A);var ib=Incident(edges,stub.B);
+   Point root,leaf;List<ConstructionEdge> arms;
+   if(ia.Count==1&&ib.Count>=3){leaf=stub.A;root=stub.B;arms=ib;}
+   else if(ib.Count==1&&ia.Count>=3){leaf=stub.B;root=stub.A;arms=ia;}
+   else continue;
+   if(curved.Any(r=>r.Curves.Any(c=>c.NearBounds(plan.Local(leaf),stub.Width)&&
+      (c.At(c.Parameter(plan.Local(leaf)))-plan.Local(leaf)).Length<stub.Width)))continue;
+   if(edges.Any(e=>e.Use=="pedestrian"&&((e.A-leaf).Length<.03||(e.B-leaf).Length<.03)))continue;
+   var through=arms.Where(e=>!ReferenceEquals(e,stub)&&e.Use==stub.Use&&Math.Abs(e.Width-stub.Width)<.001).ToArray();
+   Point End(ConstructionEdge e)=>(e.A-root).Length<.03?e.B:e.A;
+   Point a=default,b=default;bool found=false;
+   for(int i=0;i<through.Length&&!found;i++)for(int j=0;j<i;j++){
+    var u=End(through[i])-root;var v=End(through[j])-root;
+    if(SiteFrame.Dot(u,v)>=0||Math.Abs(Layout.Cross(u,v))>u.Length*v.Length*.0001)continue;
+    a=End(through[i]);b=End(through[j]);found=true;break;
+   }
+   if(!found)continue;
+   var axis=VillaGeometry.Unit(b-a);var direction=VillaGeometry.Unit(leaf-root);
+   if(Math.Abs(SiteFrame.Dot(axis,direction))>.01)continue;
+   var side=new Point(-direction.Y,direction.X)*(stub.Width/2);
+   bool Covered(Point q){double t=SiteFrame.Dot(q-a,axis);return t>=0&&t<=(b-a).Length&&Math.Abs(Layout.Cross(axis,q-a))<=stub.Width/2-.001;}
+   if(!new[]{root+side,root-side,leaf+side,leaf-side}.All(Covered))continue;
+   // Protect explicit access and nearby building/parking/facility footprints.
+   bool protectedLot=plan.Parcels.Where(p=>p.Kind==0||p.Kind==4||p.Kind==5||p.Kind==6||p.Kind==7).Any(p=>{
+    if(p.Access.HasValue&&(VillaGeometry.Nearest(plan.World(p.Access.Value),root,leaf)-plan.World(p.Access.Value)).Length<=stub.Width/2+1)return true;
+    var corners=p.PlacementOutline??new[]{new Point(p.X,p.Y),new Point(p.X+p.W,p.Y),new Point(p.X+p.W,p.Y+p.D),new Point(p.X,p.Y+p.D)};
+    var world=corners.Select(plan.World).ToArray();double pad=stub.Width/2+1;
+    return world.Min(q=>q.X)<=Math.Max(root.X,leaf.X)+pad&&world.Max(q=>q.X)>=Math.Min(root.X,leaf.X)-pad&&world.Min(q=>q.Y)<=Math.Max(root.Y,leaf.Y)+pad&&world.Max(q=>q.Y)>=Math.Min(root.Y,leaf.Y)-pad;
+   });
+   if(protectedLot)continue;
+   edges.Remove(stub);removed=true;
+  }
+  if(removed)MergeStraight(edges);
  }
  static bool ClearPath(Plan plan,Point a,Point b,double width){
   a=plan.Local(a);b=plan.Local(b);double pad=width/2;

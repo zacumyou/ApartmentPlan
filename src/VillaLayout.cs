@@ -14,6 +14,7 @@ public static class VillaLayout {
  }
 
  public static Plan Generate(IList<Point> boundary,IList<Point> entries,IList<Asset> assets,LayoutOptions o,IList<ManualZone> zones){
+  o.Observation?.Stage("validation");
   if(!Layout.Valid(boundary))throw new ArgumentException("InvalidBoundary");
   // Original lot frontage must touch the street; legacy setback is not an access margin.
   const double frontageSetback=0;
@@ -30,6 +31,7 @@ public static class VillaLayout {
   double lotDepth=selected.Max(a=>a.Depth);double pitch=(o.VillaRows==2?lotDepth+depth:depth)+aisle+2*frontageSetback;
   double rowStart=y0+margin+(o.VillaRows==2?(lotDepth+depth)/2:0)+aisle/2+frontageSetback;
   double rowEnd=rowStart+Math.Max(0,Math.Floor((y1-margin-aisle/2-rowStart-.01)/pitch))*pitch;
+  o.Observation?.Stage("roads");
   var routes=p.Routes;
   var existing=(o.VillaExistingRoads??new List<PlanRoute>()).Where(r=>r.Points.Count>1).ToList();
   p.VillaExistingRoadLength=existing.Sum(r=>r.Points.Skip(1).Select((q,i)=>Layout.Inside((q+r.Points[i])*.5,boundary)&&TowerGeometry.Distance((q+r.Points[i])*.5,boundary)>r.Width/2+2?(q-r.Points[i]).Length:0).Sum());
@@ -190,19 +192,20 @@ public static class VillaLayout {
     if(end-s0.Start>.0001)routes.Add(new PlanRoute{Use=s0.Use,Width=s0.Width,Curves=new List<PlanBezier>{curve.Slice(s0.Start,end)}});i=j;
    }
   }
+  o.Observation?.Stage("candidates");o.Observation?.Set("connections",roots.Count);o.Observation?.Set("rejectedConnections",p.VillaRejectedConnections.Count);o.Observation?.Set("gridPieces",gridPieces);
   int index=0;var candidates=new List<Parcel>();var mainCandidates=new HashSet<Parcel>();
   void Place(Point roadPoint,Point tangent,double nativeWidth,int sign,string use){
    o.Cancellation.ThrowIfCancellationRequested();
-   var a=selected[index++%selected.Count];double width=Spacing(a.Width,roadPoint,0,o),d=Spacing(a.Depth,roadPoint,1,o);
+   o.Observation?.Add("attempted");var a=selected[index++%selected.Count];double width=Spacing(a.Width,roadPoint,0,o),d=Spacing(a.Depth,roadPoint,1,o);
    var outward=new Point(-tangent.Y,tangent.X)*sign;var forward=outward*-1;
    var center=roadPoint+outward*(nativeWidth/2+frontageSetback+a.Depth/2);
    var envelope=VillaGeometry.Box(center,forward,width,d);
-   if(!ClearShape(envelope))return;
+   if(!ClearShape(envelope)){o.Observation?.Add("boundaryRejected");return;}
    // Extra spacing separates houses, without extending the road collision footprint.
    var roadFootprint=VillaGeometry.Box(center,forward,Math.Min(width,a.Width),Math.Min(d,a.Depth));
-   if(occupied.Any(b=>VillaGeometry.Overlap(b,roadFootprint)))return;
+   if(occupied.Any(b=>VillaGeometry.Overlap(b,roadFootprint))){o.Observation?.Add("roadRejected");return;}
    var fullLot=VillaGeometry.Box(center,forward,a.Width,a.Depth);
-   if(!ClearShape(fullLot))return;
+   if(!ClearShape(fullLot)){o.Observation?.Add("boundaryRejected");return;}
    // The supporting street must be internal along the full frontage, not an external approach.
    if(!Layout.Inside(roadPoint,poly)||Enumerable.Range(0,poly.Count).Min(i=>(VillaGeometry.Nearest(roadPoint,poly[i],poly[(i+1)%poly.Count])-roadPoint).Length)<nativeWidth/2+2)return;
    // Do not place frontage across a junction or a sharply curving approach.
@@ -212,7 +215,7 @@ public static class VillaLayout {
      var dir=VillaGeometry.Unit(e.B-e.A);if(Math.Abs(SiteFrame.Dot(dir,side))<.94)return false;
      var at=VillaGeometry.Nearest(target,e.A,e.B);double gap=(at-target).Length-e.Width/2;
      return SiteFrame.Dot(at-target,forward)>0&&gap>=-.5&&gap<=Math.Min(7.9,frontageSetback+2);
-    });if(!supported)return;
+    });if(!supported){o.Observation?.Add("frontRejected");return;}
    }
    var lot=new Parcel{Kind=0,AssetId=a.Id,X=center.X-a.Width/2,Y=center.Y-a.Depth/2,W=a.Width,D=a.Depth,Homes=a.Homes,PlacementForward=forward,CompactBounds=VillaGeometry.Bounds(envelope),PlacementOutline=envelope};
    lot.FloorArea=Math.Min(a.Width*a.Depth,a.GeometryWidth>0&&a.GeometryDepth>0?a.GeometryWidth*a.GeometryDepth:a.Width*a.Depth*.7)*Math.Max(1,Math.Floor(a.Height/3));
@@ -245,6 +248,7 @@ public static class VillaLayout {
   // Compare packing orders rather than locking the first candidate forever.
   // Then replace one obstructing house with two compatible candidates when possible.
   bool Conflict(Parcel a,Parcel b)=>Layout.Overlap(a.CompactBounds,b.CompactBounds)&&VillaGeometry.Overlap(a.PlacementOutline,b.PlacementOutline);
+  o.Observation?.Set("candidates",candidates.Count);o.Observation?.Stage("packing");
   var packed=new List<Parcel>();
   foreach(var order in new IEnumerable<Parcel>[] {candidates,candidates.AsEnumerable().Reverse(),candidates.OrderBy(c=>c.X),candidates.OrderBy(c=>c.Y),candidates.OrderByDescending(c=>c.X),candidates.OrderByDescending(c=>c.Y)}){
    var trial=new List<Parcel>();foreach(var c in order.OrderByDescending(c=>mainCandidates.Contains(c))){if(trial.Count>=o.VillaMaxBuildings)break;if(!trial.Any(q=>Conflict(c,q)))trial.Add(c);}if(trial.Count(mainCandidates.Contains)>packed.Count(mainCandidates.Contains)||trial.Count(mainCandidates.Contains)==packed.Count(mainCandidates.Contains)&&trial.Count>packed.Count)packed=trial;
@@ -256,7 +260,7 @@ public static class VillaLayout {
     if(a==null)continue;packed.Remove(old);packed.Add(a);packed.Add(b);improved=true;if(packed.Count>=o.VillaMaxBuildings)break;
    }if(!improved)break;
   }
-  p.Parcels.AddRange(packed);
+  p.Parcels.AddRange(packed);o.Observation?.Set("packed",packed.Count);o.Observation?.Stage("pruning");
   // Merge empty road-enclosed wedges into neighbouring housing blocks. Never
   // remove the through road or a street required by an already placed house.
   for(int pass=0;!p.VillaExistingRoadsOnly&&pass<32;pass++){
@@ -286,6 +290,7 @@ public static class VillaLayout {
     if(FrontageNetwork.Missing(p,selected,aisle,frontageSetback)==0){removed=true;break;}routes.Insert(at,r);
    }if(!removed)break;
   }
+  o.Observation?.Stage("curves");
   // Reconstruct only surviving Bezier intervals after pruning. Metadata alone
   // must never bridge a removed road span in the native construction output.
   routes.RemoveAll(r=>r.Points.Count==0&&r.Curves?.Count>0);
@@ -297,10 +302,12 @@ public static class VillaLayout {
   p.Parcels.RemoveAll(r=>r.Kind==1);occupied.Clear();occupied.AddRange(p.Parcels.Where(r=>r.Kind==0).Select(r=>r.PlacementOutline));
   foreach(var edge in ConstructionGraph.Create(p)){var a=p.Local(edge.A);var b=p.Local(edge.B);var t=VillaGeometry.Unit(b-a);var box=VillaGeometry.Box((a+b)*.5,new Point(-t.Y,t.X),(b-a).Length,edge.Width);var parcel=VillaGeometry.Bounds(box,1);parcel.PlacementOutline=box;p.Parcels.Add(parcel);occupied.Add(box);}
   // Coalesce unused cells into strips; existing tree/Grass Sprites integration consumes green parcels.
+  o.Observation?.Stage("parks");
   const double cell=4;
   for(double y=y0;!p.VillaExistingRoadsOnly&&y+cell<=y1;y+=cell){o.Cancellation.ThrowIfCancellationRequested();double start=double.NaN;for(double x=x0;x<=x1;x+=cell){var tile=new Parcel{Kind=4,X=x,Y=y,W=cell,D=cell};bool free=x+cell<=x1&&Clear(tile)&&!occupied.Any(b=>VillaGeometry.Overlap(b,tile.Corners));if(free&&double.IsNaN(start))start=x;if(!free&&!double.IsNaN(start)){p.Parcels.Add(new Parcel{Kind=4,X=start,Y=y,W=x-start,D=cell});start=double.NaN;}}}
   p.GrassPockets.AddRange(p.Parcels.Where(r=>r.Kind==4));
   VillaVariety.Assign(p.Parcels.Where(r=>r.Kind==0).ToList(),selected);
+  o.Observation?.Stage("summary");
   p.Homes=p.Parcels.Sum(r=>r.Homes);p.Far=p.Parcels.Sum(r=>r.FloorArea)/p.Area*100;p.RequestedParcels=p.Parcels.Count;p.ParcelLimit=o.MaxParcels;
   if(p.Parcels.Count>o.MaxParcels)throw new PlanLimitException("AP.LimitParcels",p.Parcels.Count,o.MaxParcels);
   p.VillaPedestrianWarnings=0;

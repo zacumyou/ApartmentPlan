@@ -44,6 +44,12 @@ public partial class ConstructionTool {
    foreach(var c in route.Curves??new List<PlanBezier>())if((c.At(c.Parameter(local))-local).Length<1)return true;
   }return false;
  }
+ // Native assignment is stronger evidence than our geometric frontage heuristic.
+ // Accept existing perimeter roads too; never accept a pending-deletion edge.
+ bool HasNativeFrontage(Entity road){
+  if(road==Entity.Null||!EntityManager.Exists(road)||EntityManager.HasComponent<Deleted>(road)||!EntityManager.HasComponent<Game.Net.Edge>(road))return false;
+  return !EntityManager.HasComponent<Temp>(road)||(EntityManager.GetComponentData<Temp>(road).m_Flags&TempFlags.Delete)==0;
+ }
  bool HasFrontageCandidate(Entity building,SpatialLookup<FrontageCandidate> index){
   var data=EntityManager.GetComponentData<BuildingData>(EntityManager.GetComponentData<PrefabRef>(building).m_Prefab);
   if((data.m_Flags&Game.Prefabs.BuildingFlags.NoRoadConnection)!=0)return false;
@@ -59,7 +65,7 @@ public partial class ConstructionTool {
  IEnumerable<int> ValidateSteps(ValidationResult result){
   failureStage=4;ClearWarnings();ClearEvidence();Metrics.Clear();Metrics["ValidationCompleted"]=0;SetProgress(80);
   int edges=0,errors=0,blocked=0,replacements=0;var buildings=result.Buildings;
-  var candidates=new List<Tuple<Entity,Entity,Game.Objects.Transform>>();
+  var candidates=new SpatialLookup<Tuple<Entity,Entity,Game.Objects.Transform>>(8);var matchedBuildings=new HashSet<Entity>();
   temps.CompleteDependency();
   using(var entities=temps.ToEntityArray(Allocator.Temp)){
    var roots=NetworkReplacementRoots(entities);Metrics["PreviewTempCount"]=entities.Length;Metrics["ReplacementRoots"]=roots.Count;Metrics["SubmittedCourses"]=submittedCourses.Count;Metrics["SubmittedConnections"]=submittedConnections.Count;
@@ -68,7 +74,9 @@ public partial class ConstructionTool {
     if(t.m_Original!=Entity.Null&&(t.m_Flags&TempFlags.Delete)!=0){if(IsNetworkReplacement(t.m_Original,roots))replacements++;else {blocked++;Evidence(t.m_Original,1,(int)t.m_Flags);WarningEntity(t.m_Original);warningNotice="AP.Warning.Protected";}}
     if(EntityManager.HasComponent<Game.Net.Edge>(e))edges++;
     if(t.m_Original==Entity.Null&&(t.m_Flags&TempFlags.Delete)==0&&EntityManager.HasComponent<Game.Buildings.Building>(e)&&EntityManager.HasComponent<Game.Objects.Transform>(e)&&EntityManager.HasComponent<PrefabRef>(e))
-     candidates.Add(Tuple.Create(e,EntityManager.GetComponentData<PrefabRef>(e).m_Prefab,EntityManager.GetComponentData<Game.Objects.Transform>(e)));
+    {var transform=EntityManager.GetComponentData<Game.Objects.Transform>(e);var position=transform.m_Position;
+     candidates.Add(Tuple.Create(e,EntityManager.GetComponentData<PrefabRef>(e).m_Prefab,transform),position.x-1,position.z-1,position.x+1,position.z+1);}
+
    }
    Trace.Event("construction.deletion.classified","networkReplacements="+replacements+" blocked="+blocked+" scopedRoots="+roots.Count);
    if(blocked>0)TraceBlockedDeletions(entities,blocked,roots);
@@ -76,10 +84,10 @@ public partial class ConstructionTool {
   Metrics["Edges"]=edges;Metrics["Errors"]=errors;Metrics["BlockedDeletions"]=blocked;Metrics["NetworkReplacements"]=replacements;
   if(blocked>0){Metrics["FailureFlags"]=1;result.Detail="Native operation would delete an existing object; blocked="+blocked+" (see construction.deletion.* log)";yield break;}
   yield return 1;
-  foreach(var target in expected){Entity found=Entity.Null;foreach(var c in candidates){
-   if(buildings.Contains(c.Item1)||c.Item2!=target.Item1||math.distancesq(c.Item3.m_Position,target.Item2)>=1||math.abs(math.dot(c.Item3.m_Rotation.value,target.Item3.value))<=.999)continue;
+  foreach(var target in expected){Entity found=Entity.Null;foreach(var c in candidates.At(target.Item2.x,target.Item2.z)){
+   if(matchedBuildings.Contains(c.Item1)||c.Item2!=target.Item1||math.distancesq(c.Item3.m_Position,target.Item2)>=1||math.abs(math.dot(c.Item3.m_Rotation.value,target.Item3.value))<=.999)continue;
    found=c.Item1;break;
-  }if(found==Entity.Null){WarningObject(target.Item1,target.Item2,target.Item3,true);warningNotice="AP.Warning.Missing";Metrics["FailureFlags"]=2;result.Detail="Native building preview incomplete: "+buildings.Count+"/"+expected.Count;yield break;}buildings.Add(found);yield return 0;}
+  }if(found==Entity.Null){WarningObject(target.Item1,target.Item2,target.Item3,true);warningNotice="AP.Warning.Missing";Metrics["FailureFlags"]=2;result.Detail="Native building preview incomplete: "+buildings.Count+"/"+expected.Count;yield break;}buildings.Add(found);matchedBuildings.Add(found);yield return 0;}
   failureStage=5;SetProgress(84);
   foreach(var step in ValidateTreesSteps())yield return step;
   if(appliedTrees.Count!=expectedTrees.Count){Metrics["FailureFlags"]=4;result.Detail="Native tree preview incomplete: "+appliedTrees.Count+"/"+expectedTrees.Count;yield break;}
@@ -92,11 +100,14 @@ public partial class ConstructionTool {
   failureStage=8;SetProgress(95);
   var frontageIndex=new SpatialLookup<FrontageCandidate>(32);
   foreach(var step in FrontageSnapshotSteps(frontageIndex))yield return step;
-  int frontage=0,roadCandidates=0,attached=0,parkingLinks=0,aisleCandidates=0;
+  int frontage=0,roadCandidates=0,nativeFrontageAccepted=0,attached=0,parkingLinks=0,aisleCandidates=0;
   foreach(var b in buildings){if(!PreviewExists(b)){Metrics["FailureFlags"]=16;result.Detail="Native preview changed during validation; reopen preview";yield break;}
    if(EntityManager.GetComponentData<Game.Buildings.Building>(b).m_RoadEdge!=Entity.Null)frontage++;
    var road=EntityManager.GetComponentData<Game.Buildings.Building>(b).m_RoadEdge;var draft=World.GetExistingSystemManaged<PlanSystem>()?.Draft;bool external=draft?.Villa==true&&road!=Entity.Null&&!VillaInternalRoad(road,draft);
-   if(!external&&HasFrontageCandidate(b,frontageIndex))roadCandidates++;else if(Mod.Options.RequireBuildingRoad||draft?.Villa==true){Evidence(b,3);WarningEntity(b,true);warningNotice="AP.Warning.Frontage";}yield return 0;
+   bool geometric=!external&&HasFrontageCandidate(b,frontageIndex);
+   bool nativeAccepted=draft?.Villa==true&&HasNativeFrontage(road);
+   if(geometric||nativeAccepted){roadCandidates++;if(!geometric&&nativeAccepted)nativeFrontageAccepted++;}
+   else if(Mod.Options.RequireBuildingRoad||draft?.Villa==true){Evidence(b,3,(external?1:0)|(road==Entity.Null?2:0)|(!HasNativeFrontage(road)?4:0));WarningEntity(b,true);warningNotice="AP.Warning.Frontage";}yield return 0;
   }
   foreach(var bay in appliedBays){
    yield return 0;
@@ -111,7 +122,7 @@ public partial class ConstructionTool {
   SetProgress(99);Metrics["ValidationCompleted"]=1;
   // No native error suppression, and Apply runs a fresh validation iterator.
   m_ErrorQuery.CompleteDependency();
-  result.Detail="buildings="+buildings.Count+" road="+frontage+" roadCandidates="+roadCandidates+" bays="+appliedBays.Count+"/"+expectedBays.Count+" attached="+attached+" aisleCandidates="+aisleCandidates+" parkingLinks="+parkingLinks+" networkEdges="+edges+" "+pavement+" errors="+errors;
+  result.Detail="buildings="+buildings.Count+" road="+frontage+" roadCandidates="+roadCandidates+" nativeFrontageAccepted="+nativeFrontageAccepted+" bays="+appliedBays.Count+"/"+expectedBays.Count+" attached="+attached+" aisleCandidates="+aisleCandidates+" parkingLinks="+parkingLinks+" networkEdges="+edges+" "+pavement+" errors="+errors;
   Metrics["AttachedBays"]=attached;Metrics["Frontage"]=frontage;Metrics["ParkingLinks"]=parkingLinks;Metrics["NativeErrorEntities"]=m_ErrorQuery.CalculateEntityCount();Metrics["Trees"]=appliedTrees.Count;Metrics["Buildings"]=buildings.Count;Metrics["RoadCandidates"]=roadCandidates;Metrics["Bays"]=appliedBays.Count;Metrics["AisleCandidates"]=aisleCandidates;Metrics["Edges"]=edges;Metrics["Errors"]=errors;
   bool requireRoad=Mod.Options.RequireBuildingRoad||World.GetExistingSystemManaged<PlanSystem>()?.Draft?.Villa==true;
    Notice=requireRoad&&roadCandidates!=buildings.Count?"AP.Native.FrontageNeeded":aisleCandidates!=expectedBays.Count?"AP.Native.ParkingNeeded":"AP.Native.ParkingPending";

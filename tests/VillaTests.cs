@@ -95,7 +95,8 @@ static class VillaTests {
   // Concave boundary, unavailable geometry and all connections excluded.
   var concave=new[]{new Point(0,0),new Point(220,0),new Point(220,180),new Point(120,180),new Point(120,280),new Point(0,280)};
   var c=Layout.Generate(concave,new[]{gates[0].Boundary},assets,new LayoutOptions{Villa=true,VillaConnections=new List<VillaConnection>{gates[0]},ParkingAisle=8,Road=16},null,null);
-  if(c.VillaThrough||c.RequiredAccessFailures==0)throw new Exception("single external direction accepted as through route");
+  // 0.1.33 allows a single entrance; through-route absence is not an access failure.
+  if(c.VillaThrough||c.RequiredAccessFailures!=0)throw new Exception("single entrance frontage or through classification");
   if(c.Parcels.Where(r=>r.Kind==0).Any(r=>!VillaGeometry.Inside(r.PlacementOutline,c.Boundary.Select(c.Local).ToList())))throw new Exception("concave lot escape");
   var none=Layout.Generate(boundary,new[]{gates[0].Boundary},assets,new LayoutOptions{Villa=true,VillaConnections=new List<VillaConnection>()},null,null);
   if(none.RequiredAccessFailures==0||none.Parcels.Any(r=>r.Kind==0))throw new Exception("no approved connection accepted");

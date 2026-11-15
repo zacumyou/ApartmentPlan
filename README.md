@@ -1,3 +1,9 @@
+# Apartment Plan 0.1.131
+
+판상형·탑상형 아파트와 빌라 단지 제작을 지원합니다. Slab, tower and villa compound planning.
+
+필수 모드 / Requirements: AP Invisible Road Pack (165049), CS KR Parking Pack (149013), Anarchy (74604), [CS KR Underground Parking Lot](https://mods.paradoxplaza.com/mods/167777/Windows) (167777).
+
 ## 0.1.79 AP 성장형 건물 보호
 
 AP로 건설을 확정한 성장형 건물은 구역 타일 불일치로 자동 철거되지 않도록 보호합니다. 기존 단지도 저장된 소유권으로 복원하며, 일반 도시 건물·시그니처·수동 삭제·재난 처리는 바꾸지 않습니다. 건물 레벨은 고정하지 않습니다. 모드를 끄면 이 보호도 적용되지 않습니다. 이미 철거된 건물은 복구하지 않습니다.

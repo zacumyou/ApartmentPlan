@@ -10,7 +10,7 @@ internal sealed class FrameWork:IDisposable {
  internal FrameWork(IEnumerable<int> steps,Func<double> milliseconds=null){iterator=steps.GetEnumerator();clock=milliseconds??(()=>Stopwatch.GetTimestamp()*1000d/Stopwatch.Frequency);}
  internal bool Step(){
   if(iterator==null)return true;double start=clock();bool done=false;
-  try{for(int units=0;units<16;units++){
+  try{for(int units=0;units<64;units++){
    if(!iterator.MoveNext()){done=true;Dispose();break;}
    if(iterator.Current!=0||clock()-start>=2)break;
   }return done;}finally{double ms=clock()-start;Slices++;CpuMs+=ms;MaxSliceMs=Math.Max(MaxSliceMs,ms);}

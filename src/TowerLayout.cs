@@ -5,6 +5,11 @@ namespace ApartmentPlan {
 public static class TowerLayout {
  sealed class Court {public Point Gate,Center,Forward,Side,Anchor;public double W,D;public Point[] Envelope,Stem;}
  public static Plan Generate(IList<Point> boundary,IList<Point> entries,IList<Asset> assets,LayoutOptions o,IList<ManualZone> zones){
+  var clock=System.Diagnostics.Stopwatch.StartNew();string stage="validation";long phase=0,attempted=0,boundaryRejected=0,courtRejected=0,frontRejected=0;
+  o.Observation?.Stage("validation");
+  void Stage(string next){o.Observation?.Stage(next);o.Timing?.Invoke("tower."+stage,clock.ElapsedMilliseconds-phase);stage=next;phase=clock.ElapsedMilliseconds;o.Diagnostic?.Invoke("stage="+stage);}
+  o.Diagnostic?.Invoke("begin entries="+entries.Count+" assets="+assets.Count+" zones="+(zones?.Count??0)+" rules="+(o.TowerRules??new TowerRules()).Encode()+" parkingSize="+(o.TowerParking==null?"missing":o.TowerParking.Width+"x"+o.TowerParking.Depth)+" roadWidth="+o.Road+" aisleWidth="+o.ParkingAisle);
+  try{
   if(!Layout.Valid(boundary))throw new ArgumentException("InvalidBoundary");if(entries.Count==0)throw new ArgumentException("EntranceFit");if(o.TowerParking==null)throw new ArgumentException("AP.Tower.SelectParking");
   var timer=System.Diagnostics.Stopwatch.StartNew();
   var p=SiteFrame.Create(boundary,entries[0]);p.Tower=true;p.TowerAlgorithmVersion=1;p.TowerSurface=o.TowerSurface;p.TowerEntranceSurface=o.TowerEntranceSurface;
@@ -14,6 +19,7 @@ public static class TowerLayout {
   bool Fits(IList<Point> shape)=>VillaGeometry.Inside(shape,poly)&&!zonesLocal.Any(z=>VillaGeometry.Overlap(shape,z));
   var courts=new List<Court>();var lots=new List<Parcel>();double width=o.ParkingAisle,radius=rules["RoadRadius"],apron=2*radius;
   PlanRoute Add(IEnumerable<PlanBezier> curves,string use,double w){var r=TowerGeometry.Route(curves,use,w);p.Routes.Add(r);return r;}
+  Stage("entranceCourts");
   foreach(var entry in entries){
    var gateWorld=SiteFrame.Nearest(boundary,entry,out var inward);var f=new Point(SiteFrame.Dot(inward,p.Right),SiteFrame.Dot(inward,p.Forward));var side=new Point(f.Y,-f.X);var gate=p.Local(gateWorld);var asset=o.TowerParking;
    // Match the incoming road width; leave enough diagonal length for both fillets.
@@ -59,10 +65,11 @@ public static class TowerLayout {
     if(clear)return true;
    }return false;
   }
+  Stage("candidates");
   var candidates=new List<Parcel>();
   for(double y=bounds.Y;y<bounds.Y+bounds.D;y+=step)for(double x=bounds.X;x<bounds.X+bounds.W;x+=step){o.Cancellation.ThrowIfCancellationRequested();foreach(var a in selected){
-    var center=new Point(x,y);var original=VillaGeometry.Box(center,forward,a.Width,a.Depth);
-    if(!Fits(original)||original.Any(q=>TowerGeometry.Distance(q,poly)<rules["BuildingBoundary"]-.001))continue;
+    attempted++;var center=new Point(x,y);var original=VillaGeometry.Box(center,forward,a.Width,a.Depth);
+    if(!Fits(original)||original.Any(q=>TowerGeometry.Distance(q,poly)<rules["BuildingBoundary"]-.001)){boundaryRejected++;continue;}
     var originalFront=VillaGeometry.Box(center+forward*(a.Depth/2+width/2),right,width,Math.Max(2,a.Width-8));
     bool boundaryBlocked=!VillaGeometry.Inside(originalFront,poly)||!EscapeFits(center,a,original,forward,true);
     var facings=boundaryBlocked&&rules["BoundaryTurn"]>0?new[]{right,right*-1}:new[]{forward};
@@ -70,12 +77,14 @@ public static class TowerLayout {
     // Then try both quarter-turns at exactly the same center, preferring more room.
     foreach(var facing in facings.OrderByDescending(f=>TowerGeometry.Distance(center+f*(a.Depth/2+width/2),poly))){
      var lateral=new Point(-facing.Y,facing.X);var shape=VillaGeometry.Box(center,facing,a.Width,a.Depth);
-     if(!Fits(shape)||shape.Any(q=>TowerGeometry.Distance(q,poly)<rules["BuildingBoundary"]-.001)||courts.Any(c=>TowerGeometry.Distance(shape,c.Envelope)<gap||VillaGeometry.Overlap(shape,c.Stem)))continue;
+     if(!Fits(shape)||shape.Any(q=>TowerGeometry.Distance(q,poly)<rules["BuildingBoundary"]-.001)||courts.Any(c=>TowerGeometry.Distance(shape,c.Envelope)<gap||VillaGeometry.Overlap(shape,c.Stem))){courtRejected++;continue;}
      var access=center+facing*(a.Depth/2+width/2);var front=VillaGeometry.Box(access,lateral,width,Math.Max(2,a.Width-8));
-     if(!Fits(front)||courts.Any(c=>VillaGeometry.Overlap(front,c.Envelope)||VillaGeometry.Overlap(front,c.Stem))||!EscapeFits(center,a,shape,facing))continue;
+     if(!Fits(front)||courts.Any(c=>VillaGeometry.Overlap(front,c.Envelope)||VillaGeometry.Overlap(front,c.Stem))||!EscapeFits(center,a,shape,facing)){frontRejected++;continue;}
      candidates.Add(new Parcel{Kind=0,AssetId=a.Id,X=x-a.Width/2,Y=y-a.Depth/2,W=a.Width,D=a.Depth,Homes=a.Homes,FloorArea=(a.Footprint>0?a.Footprint:a.Width*a.Depth*o.FootprintRatio)*Math.Max(1,a.Height/o.FloorHeight),PlacementForward=facing,PlacementOutline=shape,Access=center+facing*(a.Depth/2),AccessEstimated=false});
     }
    }}
+  o.Diagnostic?.Invoke("candidates accepted="+candidates.Count+" attempted="+attempted+" boundaryOrZone="+boundaryRejected+" facingOrCourt="+courtRejected+" frontOrEscape="+frontRejected);
+  o.Observation?.Set("candidates",candidates.Count);Stage("packing");
   List<Parcel> best=new List<Parcel>();
   // Multiple deterministic sweeps permit staggered lines without moving a single tower into an unsafe gap.
   for(int sweep=0;sweep<16;sweep++){double a=sweep*Math.PI/8;var axis=new Point(Math.Cos(a),Math.Sin(a));var chosen=new List<Parcel>();foreach(var candidate in candidates.OrderBy(q=>SiteFrame.Dot(new Point(q.X+q.W/2,q.Y+q.D/2),axis)).ThenBy(q=>q.AssetId)){
@@ -83,17 +92,24 @@ public static class TowerLayout {
    }if(chosen.Count>best.Count)best=chosen;}
   long packingMs=timer.ElapsedMilliseconds;
   lots.AddRange(best);p.Parcels.AddRange(best);
+  o.Diagnostic?.Invoke("packing selected="+best.Count+" candidates="+candidates.Count);o.Observation?.Set("packed",best.Count);Stage("routing");
   var router=new TowerRouting(p,poly,lots,courts.Select(c=>c.Stem).Concat(zonesLocal).ToList(),right,forward,o,rules);
   foreach(var court in courts)router.Anchors.Add(court.Anchor);
-  router.Build(best);TowerFrontJoins.Apply(p,poly,lots,courts.Select(c=>c.Stem).Concat(zonesLocal).ToList(),o,rules,assets);if(best.Count==0)throw new ArgumentException("AP.Tower.ConnectionFit");
+  router.Build(best);Stage("frontJoins");TowerFrontJoins.Apply(p,poly,lots,courts.Select(c=>c.Stem).Concat(zonesLocal).ToList(),o,rules,assets);if(best.Count==0)throw new ArgumentException("AP.Tower.ConnectionFit");
+  Stage("overlayRibbons");
   // Build preview ribbons from the same analytic routes used for native construction.
   foreach(var route in p.Routes){var overlay=route.Curves.SelectMany(c=>VillaGeometry.Sample(c,4)).ToList();for(int i=1;i<overlay.Count;i++){var a=overlay[i-1];var b=overlay[i];if((b-a).Length<.001)continue;var shape=VillaGeometry.Box((a+b)*.5,VillaGeometry.Unit(b-a),route.Width,(b-a).Length);var parcel=VillaGeometry.Bounds(shape,route.Use=="pedestrian"?9:1);parcel.InvisibleRoad=route.Use=="turnaround";parcel.PlacementOutline=shape;p.Parcels.Add(parcel);}}
   long roadsMs=timer.ElapsedMilliseconds-packingMs;
+  Stage("walks");
   TowerWalks.Generate(p,poly,lots,zonesLocal,o,rules,right,forward);
+  Stage("parks");
   TowerWalks.Parks(p,poly,zonesLocal,o);
+  Stage("summary");
   p.Homes=best.Sum(q=>q.Homes);p.Far=best.Sum(q=>q.FloorArea)/p.Area*100;p.RequestedParcels=p.Parcels.Count;p.ParcelLimit=o.MaxParcels;if(p.Parcels.Count>o.MaxParcels)throw new PlanLimitException("AP.LimitParcels",p.Parcels.Count,o.MaxParcels);
   p.Diagnostics+=" timingMs packing="+packingMs+" roads="+roadsMs+" walks="+(timer.ElapsedMilliseconds-packingMs-roadsMs)+" total="+timer.ElapsedMilliseconds;
-  p.Diagnostics+=" rotated="+best.Count(q=>SiteFrame.Dot(q.PlacementForward.Value,forward)<.99)+" tower building-first buildings="+best.Count+" entries="+entries.Count+" entry-surfaces="+p.TowerEntryOutlines.Count;return p;
+  p.Diagnostics+=" rotated="+best.Count(q=>SiteFrame.Dot(q.PlacementForward.Value,forward)<.99)+" tower building-first buildings="+best.Count+" entries="+entries.Count+" entry-surfaces="+p.TowerEntryOutlines.Count;o.Diagnostic?.Invoke("result buildings="+best.Count+" routes="+p.Routes.Count+" parcels="+p.Parcels.Count+" accessFailures="+p.RequiredAccessFailures+" summary="+p.Diagnostics);return p;
+  }catch(Exception e){o.Diagnostic?.Invoke("failed stage="+stage+" type="+e.GetType().Name+" reason="+e.Message+" attempted="+attempted+" boundaryOrZone="+boundaryRejected+" facingOrCourt="+courtRejected+" frontOrEscape="+frontRejected);throw;}
+  finally{o.Observation?.Set("attempted",attempted);o.Observation?.Set("boundaryRejected",boundaryRejected);o.Observation?.Set("courtRejected",courtRejected);o.Observation?.Set("frontRejected",frontRejected);o.Timing?.Invoke("tower."+stage,clock.ElapsedMilliseconds-phase);o.Timing?.Invoke("tower.total",clock.ElapsedMilliseconds);}
  }
 }
 }

@@ -49,6 +49,47 @@ public partial class PlanSystem {
   }
   Trace.Event("plan.demolition.ownedInvisible","id="+stored.Info.Number+" added="+recovered.Count);
  }
+ // Explicit confirmed cleanup only: recover isolated AP internal roads whose
+ // complete curve follows this saved plan, never an arbitrary nearby road.
+ internal List<Entity> RecoverIsolatedPlannedRoads(StoredPlan stored){
+  var result=new List<Entity>();var plan=stored.Edit?.Draft;
+  if(plan==null||plan.VillaExistingRoadsOnly||plan.Boundary.Count<3)return result;
+  var curves=ConstructionCurves.Create(plan).Where(c=>c.Use!="pedestrian").Select(c=>c.Curve).ToArray();
+  var other=new HashSet<Entity>(Saved.Where(p=>p.Entity!=stored.Entity).SelectMany(OwnedObjects));
+  var otherPlans=Saved.Where(p=>p.Entity!=stored.Entity&&p.Edit?.Draft!=null).Select(p=>p.Edit.Draft).ToArray();
+  var prefabs=World.GetOrCreateSystemManaged<PrefabSystem>();var candidates=new HashSet<Entity>();
+  bool LiveRoad(Entity e)=>EntityManager.Exists(e)&&!EntityManager.HasComponent<Deleted>(e)&&!EntityManager.HasComponent<Temp>(e);
+  using(var q=EntityManager.CreateEntityQuery(ComponentType.ReadOnly<Game.Net.Edge>(),ComponentType.ReadOnly<Game.Net.Curve>(),ComponentType.ReadOnly<PrefabRef>(),ComponentType.Exclude<Deleted>(),ComponentType.Exclude<Temp>()))
+  using(var es=q.ToEntityArray(Allocator.Temp))foreach(var e in es){
+   if(other.Contains(e)||EntityManager.HasComponent<Owner>(e))continue;
+   if(!prefabs.TryGetPrefab<PrefabBase>(EntityManager.GetComponentData<PrefabRef>(e).m_Prefab,out var prefab)||!prefab.name.StartsWith("AP Invisible ",StringComparison.Ordinal))continue;
+   var c=EntityManager.GetComponentData<Game.Net.Curve>(e).m_Bezier;
+   var curve=new PlanBezier{A=new Point(c.a.x,c.a.z),B=new Point(c.b.x,c.b.z),C=new Point(c.c.x,c.c.z),D=new Point(c.d.x,c.d.z)};
+   if(!CompoundRoadPolicy.Follows(curve,curves,.25))continue;
+   var samples=VillaGeometry.Sample(curve,.5);
+   if(samples.Any(p=>!Layout.Inside(p,plan.Boundary)||otherPlans.Any(o=>o.Boundary.Count>=3&&Layout.Inside(p,o.Boundary))))continue;
+   candidates.Add(e);
+  }
+  IEnumerable<Entity> Neighbours(Entity e){var edge=EntityManager.GetComponentData<Game.Net.Edge>(e);foreach(var n in new[]{edge.m_Start,edge.m_End}){
+   if(!EntityManager.HasBuffer<Game.Net.ConnectedEdge>(n)){yield return Entity.Null;continue;}
+   foreach(var link in EntityManager.GetBuffer<Game.Net.ConnectedEdge>(n,true))if(LiveRoad(link.m_Edge))yield return link.m_Edge;
+  }}
+  int matched=candidates.Count;
+  // Removing a boundary candidate propagates through the entire connected component.
+  var isolated=PlanDeletionPolicy.Isolated(candidates,Neighbours);
+  foreach(var e in isolated){result.Add(e);var edge=EntityManager.GetComponentData<Game.Net.Edge>(e);foreach(var n in new[]{edge.m_Start,edge.m_End})if(!other.Contains(n)&&LiveRoad(n))result.Add(n);}
+  result=result.Distinct().ToList();
+  if(result.Count>0){
+   if(!EntityManager.HasBuffer<PlanOwnedEntity>(stored.Entity))EntityManager.AddBuffer<PlanOwnedEntity>(stored.Entity);
+   if(!EntityManager.HasBuffer<PlanBuiltRoad>(stored.Entity))EntityManager.AddBuffer<PlanBuiltRoad>(stored.Entity);
+   var owned=new HashSet<Entity>(OwnedObjects(stored));var buffer=EntityManager.GetBuffer<PlanOwnedEntity>(stored.Entity);
+   foreach(var e in result)if(owned.Add(e))buffer.Add(new PlanOwnedEntity{Entity=e});
+   var verified=EntityManager.GetBuffer<PlanBuiltRoad>(stored.Entity);var known=new HashSet<Entity>();foreach(var e in verified)known.Add(e.Entity);
+   foreach(var e in isolated)if(known.Add(e))verified.Add(new PlanBuiltRoad{Entity=e});
+  }
+  Trace.Event("plan.demolition.recovery","id="+stored.Info.Number+" matched="+matched+" isolatedRoads="+isolated.Count+" roots="+result.Count);
+  return result;
+ }
  void BeginDemolition(){
   var stored=SelectedStored;var owned=OwnedObjects(stored);if(stored==null||owned.Count==0){Status="AP.NoOwnership";return;}
   Trace.Event("plan.demolition.request","id="+stored.Info.Number+" replacement="+ReplacingCompound(stored.Info.Number));
@@ -178,7 +219,7 @@ public partial class ConstructionTool {
  // Explicit recovery path: discard native preview (including foreign deletions),
  // then mark only surviving recorded compound roots for native deletion cleanup.
  int forceDemolitionStage;
- internal bool CanForceDemolition=>Demolishing&&submitted&&!committed&&!applyRequested&&forceDemolitionStage==0&&frame>=8&&!Valid;
+ internal bool CanForceDemolition=>Demolishing&&submitted&&!committed&&!applyRequested&&forceDemolitionStage==0&&frame>=8;
  internal void RequestForceDemolition(){if(CanForceDemolition)forceDemolitionStage=1;}
  bool ForceNodeExclusive(Entity node,HashSet<Entity> edges){
   if(!EntityManager.HasBuffer<Game.Net.ConnectedEdge>(node))return false;
@@ -189,6 +230,7 @@ public partial class ConstructionTool {
   if(forceDemolitionStage==1){ClearDefinitions();applyMode=ApplyMode.Clear;forceDemolitionStage=2;return;}
   var stored=Plans.Saved.Find(p=>p.Info.Number==demolitionPlan);
   if(stored==null){forceDemolitionStage=0;return;}
+  var recovered=Plans.RecoverIsolatedPlannedRoads(stored);foreach(var road in recovered)demolitionTargets.Add(road);
   var owned=new HashSet<Entity>(Plans.OwnedObjects(stored));
   var other=new HashSet<Entity>(Plans.Saved.Where(p=>p.Entity!=stored.Entity).SelectMany(p=>Plans.OwnedObjects(p)));
   var targets=PlanDeletionPolicy.ForceTargets(demolitionTargets,owned,other,Live).ToList();

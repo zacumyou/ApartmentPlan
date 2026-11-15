@@ -22,7 +22,7 @@ public partial class PlanSystem {
    var report=new {
     utc=DateTime.UtcNow,mod="ApartmentPlan",version=typeof(Mod).Assembly.GetName().Version.ToString(),
     build=typeof(Mod).Module.ModuleVersionId,gameVersion=UnityEngine.Application.version,
-    status=Status,limit=LimitInfo,mode=Mode,layoutPending=LayoutPending,layoutOutdated=LayoutOutdated,
+    status=Status,limit=LimitInfo,mode=Mode,planning=SharedPlanning(),layoutPending=LayoutPending,layoutOutdated=LayoutOutdated,
     main=Mod.Options.MainNetwork,aisle=Mod.Options.AisleNetwork,walk=Mod.Options.WalkNetwork,
     buildingPattern=Mod.Options.BuildingPattern,allowMainTJunctions=Mod.Options.AllowMainTJunctions,
     selected=Selected.ToArray(),boundary=Boundary,entrances=Entrances,

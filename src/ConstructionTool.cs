@@ -49,11 +49,11 @@ public partial class ConstructionTool:ToolBaseSystem {
   Trace.Event("construction.failure.evidence",Newtonsoft.Json.JsonConvert.SerializeObject(failureEvidence),true);
   Trace.Event("construction.failure.metrics",string.Join(" ",Metrics.Select(p=>p.Key+"="+p.Value)));
  }
- void Status(string key,string detail=""){var s=Plans;if(s==null)return;if(key=="AP.NativeBlocked"&&World.GetExistingSystemManaged<ToolSystem>()?.activeTool!=this)return;if(key=="AP.NativeBlocked"){CaptureFailure();if(WarningShapes.Count>0)Notice=warningNotice.Length>0?warningNotice:"AP.Warning.Native";}else if(key=="AP.NativeReady"||key=="AP.NativeApplied")ClearWarnings();if(key=="AP.NativeBlocked"&&s.Status!=key)s.Sound(PlanSound.Fail);s.Status=key;Report=detail;s.Revision++;Trace.Event("construction."+key,detail);}
+ void Status(string key,string detail=""){var s=Plans;if(s==null)return;if(key=="AP.NativeBlocked"&&World.GetExistingSystemManaged<ToolSystem>()?.activeTool!=this)return;if(key=="AP.NativeBlocked"){CaptureFailure();if(WarningShapes.Count>0)Notice=warningNotice.Length>0?warningNotice:"AP.Warning.Native";}else if(key=="AP.NativeReady"||key=="AP.NativeApplied")ClearWarnings();if(key=="AP.NativeBlocked"&&s.Status!=key)s.Sound(PlanSound.Fail);s.Status=key;Report=detail;s.Revision++;Trace.Event("construction."+key,detail,Trace.LocalTower);}
  FrameWork previewWork;ValidationResult validation;
  bool AdvanceWork(){
   if(!previewWork.Step())return false;
-  Trace.Event("construction.work","slices="+previewWork.Slices+" cpuMs="+previewWork.CpuMs.ToString("F1")+" maxSliceMs="+previewWork.MaxSliceMs.ToString("F1"));previewWork=null;return true;
+  Trace.Event("construction.work","slices="+previewWork.Slices+" cpuMs="+previewWork.CpuMs.ToString("F1")+" maxSliceMs="+previewWork.MaxSliceMs.ToString("F1"),Trace.LocalTower);previewWork=null;return true;
  }
  protected override JobHandle OnUpdate(JobHandle deps){
   applyMode=ApplyMode.None;var s=Plans;if(s==null||!s.Ready)return deps;
@@ -108,7 +108,7 @@ public partial class ConstructionTool:ToolBaseSystem {
  Entity Definition(Entity prefab,bool publish=true){publish=publish&&!deferDefinitions;var e=publish?EntityManager.CreateEntity(typeof(CreationDefinition),typeof(Updated)):EntityManager.CreateEntity(typeof(CreationDefinition));definitions.Add(e);EntityManager.SetComponentData(e,new CreationDefinition{m_Prefab=prefab,m_RandomSeed=12345+definitions.Count*7919});return e;}
  IEnumerable<int> SubmitSteps(PlanSystem s){
   if(s.Draft.RequiredAccessFailures>0)throw new InvalidOperationException("Required pedestrian access cannot be routed inside the site");
-  foreach(var role in new[]{"main","aisle","pedestrian","turnaround"}){var selected=s.Network(role);if(selected!=null)Trace.Event("construction.network.selected","role="+role+" prefab="+selected.Id+" width="+selected.Width+" road="+!selected.Path+" car="+selected.Car+" walk="+selected.Walk);}
+  foreach(var role in new[]{"main","aisle","pedestrian","turnaround"}){var selected=s.Network(role);if(selected!=null)Trace.Event("construction.network.selected","role="+role+" prefab="+selected.Id+" width="+selected.Width+" road="+!selected.Path+" car="+selected.Car+" walk="+selected.Walk,Trace.LocalTower);}
   var graph=ConstructionCurves.Create(s.Draft);if(graph.Count>1500)throw new InvalidOperationException("Network segment budget exceeded");
   yield return 1;var connections=new SpatialLookup<ConnectionCandidate>(32);
   foreach(var step in ConnectionSnapshotSteps(connections))yield return step;
@@ -159,7 +159,7 @@ public partial class ConstructionTool:ToolBaseSystem {
   deferDefinitions=false;
   using(var publish=new NativeArray<Entity>(definitions.Skip(objectStart).ToArray(),Allocator.Temp))EntityManager.AddComponent<Updated>(publish);
   yield return 1;
-  Trace.Event("construction.submitted","networks="+graph.Count+" buildings="+expected.Count+" bays="+expectedBays.Count);
+  Trace.Event("construction.submitted","networks="+graph.Count+" buildings="+expected.Count+" bays="+expectedBays.Count,Trace.LocalTower);
  }
  bool parkingChanged;
  IEnumerable<int> AttachParkingSteps(PlanSystem s){

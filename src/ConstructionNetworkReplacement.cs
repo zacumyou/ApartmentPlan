@@ -34,6 +34,28 @@ public partial class ConstructionTool {
    }
   }
  }
+ // Native CourseSplitSystem can regenerate a road when a path footprint touches
+ // it even with no explicit CoursePos connection. This grants preservation scope
+ // only, AFTER the direct-connection root pass; it never grants deletion by itself.
+ void AddAutomaticPathContacts(NativeArray<Entity> entities,HashSet<Entity> anchors){
+  int added=0;var seen=new HashSet<Entity>();
+  foreach(var e in entities){var t=EntityManager.GetComponentData<Temp>(e);var original=t.m_Original;
+   if(original==Entity.Null||!seen.Add(original)||anchors.Contains(original)||!EntityManager.HasComponent<Game.Net.Edge>(original)||!EntityManager.HasComponent<Game.Net.Curve>(original)||!EntityManager.HasComponent<PrefabRef>(original))continue;
+   var prefab=EntityManager.GetComponentData<PrefabRef>(original).m_Prefab;
+   if(!EntityManager.HasComponent<RoadData>(prefab)||!EntityManager.HasComponent<NetGeometryData>(prefab)||!GroundRoad(original))continue;
+   var road=EntityManager.GetComponentData<Game.Net.Curve>(original).m_Bezier;
+   foreach(var source in submittedCourses){
+    if(!EntityManager.HasComponent<PathwayData>(source.Prefab)||!EntityManager.HasComponent<NetGeometryData>(source.Prefab))continue;
+    float reach=(EntityManager.GetComponentData<NetGeometryData>(prefab).m_DefaultWidth+EntityManager.GetComponentData<NetGeometryData>(source.Prefab).m_DefaultWidth)*.5f;
+    int samples=math.clamp((int)math.ceil(MathUtils.Length(source.Curve)/.5f),8,4096);bool contact=false;
+    for(int i=0;i<=samples;i++){var point=MathUtils.Position(source.Curve,(float)i/samples);
+     if(MathUtils.Distance(road.xz,point.xz,out float at)<=reach&&math.abs(MathUtils.Position(road,at).y-point.y)<=1){contact=true;break;}
+    }
+    if(!contact)continue;anchors.Add(original);added++;break;
+   }
+  }
+  if(added>0)Trace.Event("construction.deletion.pathContact","anchors="+added+" preservationRequired=true");
+ }
  HashSet<Entity> NetworkReplacementRoots(NativeArray<Entity> entities){
   jointDiagnosticsByEntity.Clear();
   var touched=new HashSet<Entity>(submittedConnections);
@@ -73,7 +95,9 @@ public partial class ConstructionTool {
   // A fully split connection road may have NO Temp carrying its original ID.
   // Keep connection evidence separate from deletion permission: an anchor alone
   // never authorizes deletion, only a geometrically proved native merge does.
+  AddAutomaticPathContacts(entities,touched);
   AddCombinedNetworkRoots(entities,roots,touched);
+  AddPreservedSplitRoots(entities,roots,touched);
   AddRetainedJointRoots(entities,roots,touched);
 
   Trace.Event("construction.deletion.scope","submittedConnections="+submittedConnections.Count+" courses="+submittedCourses.Count+" staged="+staged.Count+" touched="+touched.Count+" roots="+roots.Count);

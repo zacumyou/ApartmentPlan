@@ -16,8 +16,9 @@ internal sealed class LayoutInput {
 public partial class PlanSystem {
  readonly LatestLayoutWork<Plan> layoutWorker=new LatestLayoutWork<Plan>();
  readonly LayoutDebounce layoutDebounce=new LayoutDebounce();
+ Dictionary<string,int> lastPlanning;
  internal bool LayoutPending,LayoutOutdated;Action layoutRejected;Plan layoutPrevious;
- void CancelLayout(){layoutDebounce.Cancel();layoutWorker.Cancel();LayoutPending=false;layoutRejected=null;}
+ void CancelLayout(){lastPlanning=null;layoutDebounce.Cancel();layoutWorker.Cancel();LayoutPending=false;layoutRejected=null;}
  void Rebuild(Action rejected=null){
   if(!Mod.Options.AutoCalculate){
    // Deferred edits stay in the input model. A later failure must not roll back
@@ -67,11 +68,12 @@ public partial class PlanSystem {
    input.Options.FunctionTiming=new LayoutFunctionTiming();
    var timingId=Guid.NewGuid().ToString("N").Substring(0,8);
    input.Options.Timing=(stage,ms)=>Trace.Event("layout.localTiming", "run="+timingId+" stage="+stage+" ms="+ms,true);
+   input.Options.Diagnostic=line=>Trace.Event("layout.localTower","run="+timingId+" "+line,true);
    input.Options.Timing("start",0);
    // Local-only fingerprint compares complete inputs without logging coordinates or asset names.
    using(var digest=System.Security.Cryptography.SHA256.Create()){
     var fingerprint=BitConverter.ToString(digest.ComputeHash(System.Text.Encoding.UTF8.GetBytes(json))).Replace("-","");
-    Trace.Event("layout.localInput","run="+timingId+" hash="+fingerprint+" points="+input.Boundary.Count+" assets="+input.Assets.Count+" entrances="+input.Entrances.Count+" roads="+(input.Roads?.Count??0)+" zones="+(input.Zones?.Count??0),true);
+    Trace.Event("layout.localInput","run="+timingId+" hash="+fingerprint+" mode="+(input.Options.Tower?"tower":input.Options.Villa?"villa":"slab")+" points="+input.Boundary.Count+" assets="+input.Assets.Count+" entrances="+input.Entrances.Count+" roads="+(input.Roads?.Count??0)+" zones="+(input.Zones?.Count??0),true);
    }
 #endif
    // Replay snapshots are opt-in diagnostic files.
@@ -95,7 +97,11 @@ public partial class PlanSystem {
   if(layoutDebounce.Pending){if(commands.Count==0&&layoutDebounce.Take(UnityEngine.Time.realtimeSinceStartupAsDouble)){try{CalculateLayout();}catch(Exception e){CancelLayout();LayoutOutdated=true;Status="AP.Error";Trace.Failure("layout.prepare.failed",e);Revision++;}}return;}
 
   if(!layoutWorker.Poll(out var result,out var error))return;
+  lastPlanning=error?.Data["planning"] as Dictionary<string,int>??result?.Planning;
   LayoutPending=false;var rejected=layoutRejected;layoutRejected=null;
+  #if AP_LOCAL_TIMING
+  if(lastPlanning!=null)Trace.Event("layout.localPlanning",JsonConvert.SerializeObject(lastPlanning),true);
+#endif
   if(error!=null){
    failedLayoutStatus=error.Message;
    if(error.Message=="EntranceFit"||error.Message=="EntranceSpacing"){

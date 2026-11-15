@@ -27,6 +27,7 @@ public partial class PlanSystem {
  CancellationTokenSource diagnosticShareCancel;
  DateTime diagnosticShareNext;
  // Explicit field allowlist: never send clipboard reports, trace text, paths or save data.
+ Dictionary<string,int> SharedPlanning(){var mode=Tower?2:Villa?1:0;var d=lastPlanning!=null&&lastPlanning.TryGetValue("planMode",out int m)&&m==mode?new Dictionary<string,int>(lastPlanning):new Dictionary<string,int>{{"version",1},{"planMode",mode},{"outcome",0}};return d;}
  string CreateSharedDiagnostic(){
   var metrics=Status=="AP.NativeBlocked"&&NativeFailureSnapshot!=null?NativeFailureSnapshot:HasCurrentNativeReport?World.GetExistingSystemManaged<ConstructionTool>()?.Metrics:null;
   if(Status=="AP.FrontageRecalculate")metrics=new Dictionary<string,int>{{"DiagnosticVersion",2},{"FrontageMissing",FrontageMissing}};
@@ -47,7 +48,7 @@ public partial class PlanSystem {
    modVersion=typeof(Mod).Assembly.GetName().Version.ToString(),
    gameVersion=SafeReportCode(UnityEngine.Application.version),status=SafeReportCode(Status),mode=SafeReportCode(Mode),
    layoutPending=LayoutPending,layoutOutdated=LayoutOutdated,buildingPattern=Mod.Options.BuildingPattern,
-   failureDetails=(evidence??new List<Dictionary<string,int>>()).Take(24).ToArray(),counts,nativeMetrics=(metrics??new Dictionary<string,int>()).Where(p=>SharedMetricKeys.Contains(p.Key)).Take(64).ToDictionary(p=>p.Key,p=>p.Value)
+   planning=SharedPlanning(),failureDetails=(evidence??new List<Dictionary<string,int>>()).Take(24).ToArray(),counts,nativeMetrics=(metrics??new Dictionary<string,int>()).Where(p=>SharedMetricKeys.Contains(p.Key)).Take(64).ToDictionary(p=>p.Key,p=>p.Value)
   });
  }
  static string SafeReportCode(string value)=>value!=null&&Regex.IsMatch(value,@"\A[A-Za-z0-9][A-Za-z0-9_.-]{0,95}\z")?value:"unknown";

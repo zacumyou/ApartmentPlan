@@ -17,6 +17,7 @@ public partial class PlanSystem {
  case "towerPaving":Mod.Options.TowerEntrancePaving=!Mod.Options.TowerEntrancePaving;break;
  case "towerFacility":Mod.Options.TowerFacility=!Mod.Options.TowerFacility;break;
  case "towerTurn":if(!int.TryParse(value,out int n)||n<0||n>2)return true;Mod.Options.TowerTurnStyle=n;break;default:return true;}
+ Trace.Event("tower.settings.changed","command="+command+" value="+value,Trace.LocalTower);
  Mod.Options.ApplyAndSave();Rebuild();Revision++;return true;}
 }
 }

@@ -76,8 +76,10 @@ public sealed class LayoutOptions {
  public List<PlanRoute> VillaExistingRoads=new List<PlanRoute>();public double VillaGap=0,VillaReduction=3,VillaMainSpacing=120,VillaBoundary=2,VillaSetback=0;
  public int VillaRows=2,VillaMaxBuildings=500;
  public List<VillaConnection> VillaConnections=new List<VillaConnection>();
+ internal PlanningObservation Observation {get;set;}
  internal LayoutFunctionTiming FunctionTiming {get;set;}
  internal Action<string,long> Timing {get;set;}
+ internal Action<string> Diagnostic {get;set;}
  internal System.Threading.CancellationToken Cancellation{get;set;}
  public bool RequireBuildingRoad=true;public int ParkingOrientation=0;public double ParkingEndClearance=3,VehiclePassageWidth=3;
  public double PerimeterPathSpacing=80,FrontParkingCoverage=.2,BoundaryGreenMargin=4,ParkingPavingMargin=1,BuildingStagger=2,MaxAccessLength=40,FrontParkingDistance=40,VerticalPreference=.38,SearchStep=2;
@@ -104,6 +106,7 @@ public sealed class LayoutOptions {
  public int MaxParcels=PlanLimits.Parcels;
 }
 public sealed class Plan {
+ [Newtonsoft.Json.JsonIgnore] internal Dictionary<string,int> Planning;
  public List<ConstructionCourse> AdditionCourses;
  public int TowerAlgorithmVersion;
  public List<List<Point>> TowerGrassOutlines=new List<List<Point>>();
@@ -151,7 +154,12 @@ public static class Layout {
  }
  public static bool Overlap(Parcel a,Parcel b,double gap=0)=>a.X<b.X+b.W+gap-E&&a.X+a.W+gap>b.X+E&&a.Y<b.Y+b.D+gap-E&&a.Y+a.D+gap>b.Y+E;
  public static Plan Frame(IList<Point> boundary,Point entrance)=>SiteFrame.Create(boundary,entrance);
- public static Plan Generate(IList<Point> boundary,IList<Point> entrances,IList<Asset> assets,LayoutOptions o,IList<Parcel> ramps,IList<ManualZone> zones,IList<ManualRoad> roads=null)=>o.Tower?TowerLayout.Generate(boundary,entrances,assets,o,zones):o.Villa?VillaLayout.Generate(boundary,entrances,assets,o,zones):ResidentialLayout.Generate(boundary,entrances,assets,o,ramps,zones,roads);
+ public static Plan Generate(IList<Point> boundary,IList<Point> entrances,IList<Asset> assets,LayoutOptions o,IList<Parcel> ramps,IList<ManualZone> zones,IList<ManualRoad> roads=null){
+  var observation=new PlanningObservation(o,boundary.Count,entrances.Count,assets,zones?.Count??0,roads?.Count??0);o.Observation=observation;
+  try{var p=o.Tower?TowerLayout.Generate(boundary,entrances,assets,o,zones):o.Villa?VillaLayout.Generate(boundary,entrances,assets,o,zones):ResidentialLayout.Generate(boundary,entrances,assets,o,ramps,zones,roads);observation.Result(p);p.Planning=observation.Finish(1);return p;}
+  catch(Exception e){e.Data["planning"]=observation.Finish(e is OperationCanceledException?3:2);throw;}
+  finally{o.Observation=null;}
+ }
  public static Plan Generate(IList<Point> boundary,Point entrance,IList<Asset> assets,LayoutOptions o,IList<Parcel> ramps)=>ResidentialLayout.Generate(boundary,entrance,assets,o,ramps);
 }
 }

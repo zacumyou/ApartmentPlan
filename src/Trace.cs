@@ -4,6 +4,13 @@ using System.IO;
 using System.Text;
 namespace ApartmentPlan {
 internal static class Trace {
+ internal static bool LocalTower {get{
+#if AP_LOCAL_TIMING
+ return Mod.Options?.PlanMode==2;
+#else
+ return false;
+#endif
+ }}
  internal static bool Detailed=>Mod.Options?.DebugLogging==true;
  static readonly List<string> recent=new List<string>();static int recentBytes;
  internal static string Recent(){lock(gate)return string.Join("\n",recent);}

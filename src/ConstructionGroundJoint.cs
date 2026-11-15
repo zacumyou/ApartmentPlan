@@ -7,7 +7,7 @@ using Unity.Mathematics;
 namespace ApartmentPlan {
 public partial class ConstructionTool {
  // Native NodeReductionSystem.TryJoinCurve refits Y for ground roads. Only this
- // joint-only path may use XZ coverage, and only with preserved endpoint identity
+ // preservation paths may use XZ coverage, and only with preserved endpoint identity
  // and a connected same-prefab ground chain contained in the two original roads.
  bool GroundRoad(Entity e){
   if(!EntityManager.HasComponent<Game.Net.Edge>(e)||!EntityManager.HasComponent<PrefabRef>(e))return false;
@@ -21,6 +21,39 @@ public partial class ConstructionTool {
    (flags.m_Right&(CompositionFlags.Side.Raised|CompositionFlags.Side.Lowered))==0;
  }
  Entity OriginalNode(Entity e){if(EntityManager.HasComponent<Temp>(e)){var t=EntityManager.GetComponentData<Temp>(e);if(t.m_Original!=Entity.Null)return t.m_Original;}return e;}
+ // A deleted edge may be replaced by several native pieces without deleting a
+ // degree-two joint. Verify a connected, fully contained chain, not a single survivor.
+ void AddPreservedSplitRoots(Unity.Collections.NativeArray<Entity> entities,HashSet<Entity> roots,HashSet<Entity> anchors){
+  var survivors=new List<Entity>();var removed=new HashSet<Entity>();var scopedNodes=new HashSet<Entity>();
+  foreach(var road in anchors)if(EntityManager.HasComponent<Game.Net.Edge>(road)){var edge=EntityManager.GetComponentData<Game.Net.Edge>(road);scopedNodes.Add(edge.m_Start);scopedNodes.Add(edge.m_End);}
+  foreach(var e in entities){var t=EntityManager.GetComponentData<Temp>(e);if(!EntityManager.HasComponent<Game.Net.Edge>(e))continue;
+   if((t.m_Flags&TempFlags.Delete)!=0){if(t.m_Original!=Entity.Null&&!roots.Contains(t.m_Original))removed.Add(t.m_Original);}
+   else if(EntityManager.HasComponent<Game.Net.Curve>(e)&&EntityManager.HasComponent<PrefabRef>(e))survivors.Add(e);
+  }
+  foreach(var original in removed){
+   if(!GroundRoad(original)||!EntityManager.HasComponent<Game.Net.Curve>(original))continue;
+   var source=EntityManager.GetComponentData<Game.Net.Edge>(original);
+   if(!anchors.Contains(original)&&!scopedNodes.Contains(source.m_Start)&&!scopedNodes.Contains(source.m_End))continue;
+   var curve=EntityManager.GetComponentData<Game.Net.Curve>(original).m_Bezier.xz;
+   var prefab=EntityManager.GetComponentData<PrefabRef>(original).m_Prefab;
+   var candidates=new List<Entity>();var links=new List<System.Tuple<Entity,Entity>>();
+   Entity Key(Entity node){var key=OriginalNode(node);return key==source.m_Start||key==source.m_End?key:node;}
+   bool Endpoint(Entity node,float3 position){var key=OriginalNode(node);return (key!=source.m_Start&&key!=source.m_End)||EntityManager.HasComponent<Game.Net.Node>(key)&&math.distance(EntityManager.GetComponentData<Game.Net.Node>(key).m_Position,position)<=.25f;}
+   foreach(var e in survivors){
+    if(EntityManager.GetComponentData<PrefabRef>(e).m_Prefab!=prefab||!GroundRoad(e))continue;
+    var c=EntityManager.GetComponentData<Game.Net.Curve>(e).m_Bezier;int samples=math.clamp((int)math.ceil(MathUtils.Length(c)/.25f),16,8192);bool contained=true;
+    for(int i=0;i<=samples;i++)if(MathUtils.Distance(curve,MathUtils.Position(c,(float)i/samples).xz,out _)>.25f){contained=false;break;}
+    if(!contained)continue;var edge=EntityManager.GetComponentData<Game.Net.Edge>(e);
+    if(!Endpoint(edge.m_Start,c.a)||!Endpoint(edge.m_End,c.d))continue;
+    candidates.Add(e);links.Add(System.Tuple.Create(Key(edge.m_Start),Key(edge.m_End)));
+   }
+   var component=NetworkReplacementPolicy.ConnectedComponent(source.m_Start,links);bool connected=component.Contains(source.m_End);
+   var chain=new List<Entity>();for(int i=0;i<candidates.Count;i++)if(component.Contains(links[i].Item1)&&component.Contains(links[i].Item2))chain.Add(candidates[i]);
+   bool covered=connected&&CoversRoadBySurvivors(original,chain,true);
+   if(covered)roots.Add(original);
+   Trace.Event(covered?"construction.deletion.preservedSplit":"construction.failure.split","original="+original+" candidates="+candidates.Count+" connected="+connected+" covered="+covered);
+  }
+ }
  bool GroundJointPreserved(Entity a,Entity b,Entity joint,List<Entity> survivors){
   if(jointDiagnosticsByEntity.TryGetValue(joint,out var diagnostic))diagnostic[2]=1;
   if(!GroundRoad(a)||!GroundRoad(b)||!EntityManager.HasComponent<Game.Net.Curve>(a)||!EntityManager.HasComponent<Game.Net.Curve>(b))return false;

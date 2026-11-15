@@ -6,7 +6,11 @@ namespace ApartmentPlan {
 internal sealed class LocalPerformanceLog {
  internal static string Folder=>Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)+"Low","Colossal Order","Cities Skylines II","Logs","ApartmentPlan");
  bool enabled;double nextCheck,nextWrite;int samples;double cpuSum,cpuMax,frameSum,waitSum,labelSum;long tested,culled,lod,submitted;
- internal bool Enabled(double now){if(now>=nextCheck){nextCheck=now+5;try{enabled=File.Exists(Path.Combine(Folder,"enable-local-performance.flag"));}catch{enabled=false;}if(!enabled)Reset();}return enabled;}
+ internal bool Enabled(double now){if(now>=nextCheck){nextCheck=now+5;try{enabled=false;
+#if AP_LOCAL_TIMING
+ enabled=true;
+#endif
+}catch{enabled=false;}if(!enabled)Reset();}return enabled;}
  void Reset(){samples=0;cpuSum=cpuMax=frameSum=waitSum=labelSum=0;tested=culled=lod=submitted=0;}
  internal void Add(double now,double cpuMs,double frameMs,int testedCount,int culledCount,int lodCount,int submittedCount,double writerWaitMs,double labelsMs){
   waitSum+=writerWaitMs;labelSum+=labelsMs;samples++;cpuSum+=cpuMs;cpuMax=Math.Max(cpuMax,cpuMs);frameSum+=frameMs;tested+=testedCount;culled+=culledCount;submitted+=submittedCount;lod+=lodCount;

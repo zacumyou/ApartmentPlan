@@ -96,6 +96,9 @@ static class NetworkReplacementTests {
   NetworkReplacementPolicy.ExpandMerges(roots,new List<NetworkReplacementPolicy.Merge<int>>{new NetworkReplacementPolicy.Merge<int>{Removed=471314,Joint=470549,Neighbour=471592,Survivor=471592,Verified=true}},committed);
   if(!roots.Contains(471314)||!roots.Contains(470549)||roots.Contains(999))throw new Exception("stage retained-road merge failed");
   Console.WriteLine("PASS stage transition: retained committed road seeds verified merge; missing replacement and foreign roads stay blocked.");
+  var isolated=PlanDeletionPolicy.Isolated(new[]{1,2,3,4},e=>e==1?new[]{1,2}:e==2?new[]{1,2,99}:e==3?new[]{3,4}:new[]{3,4});
+  if(isolated.Count!=2||!isolated.Contains(3)||!isolated.Contains(4))throw new Exception("isolated cleanup crossed foreign connection or missed isolated component");
+  Console.WriteLine("PASS isolated cleanup rejects entire component touching foreign road, retains separate closed component.");
   var spatial=new SpatialLookup<int>(32);var boxes=new List<(double x,double z)>();
   for(int i=0;i<10000;i++){double x=(i%100-50)*40,z=(i/100-50)*40;boxes.Add((x,z));spatial.Add(i,x-1.5,z-1.5,x+12,z+20);}
   var random=new Random(19);int examined=0;

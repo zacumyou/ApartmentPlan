@@ -9,6 +9,7 @@ public sealed class TowerRouting {
  public readonly List<Point> Anchors=new List<Point>();readonly List<PlanRoute> connected=new List<PlanRoute>();
  public TowerRouting(Plan p,IList<Point> poly,List<Parcel> lots,List<Point[]> excluded,Point u,Point v,LayoutOptions o,TowerRules r){this.p=p;this.poly=poly;this.lots=lots;this.excluded=excluded;this.u=u;this.v=v;this.o=o;this.r=r;}
  Point UV(Point q)=>new Point(SiteFrame.Dot(q,u),SiteFrame.Dot(q,v));Point XY(Point q)=>u*q.X+v*q.Y;
+ long searchCalls,searchNodes,searchVisits,searchLimits;
  readonly Dictionary<string,int> rejectedReasons=new Dictionary<string,int>();
  bool Reject(string reason){rejectedReasons[reason]=rejectedReasons.TryGetValue(reason,out var n)?n+1:1;return false;}
  bool Clear(Point a,Point b,bool branch=false){if((b-a).Length<.001)return true;var shape=VillaGeometry.Box((a+b)*.5,VillaGeometry.Unit(b-a),o.ParkingAisle-.02,(b-a).Length);
@@ -85,7 +86,8 @@ public sealed class TowerRouting {
   int saved=p.Routes.Count;var rawAnchors=Anchors.ToArray();
   for(int attempt=0;attempt<8;attempt++){
    o.Cancellation.ThrowIfCancellationRequested();connected.Clear();p.Routes.RemoveRange(saved,p.Routes.Count-saved);
-   Anchors.Clear();Anchors.AddRange(rawAnchors);if(!PrepareBranches(attempt))continue;
+   Anchors.Clear();Anchors.AddRange(rawAnchors);if(!PrepareBranches(attempt)){o.Observation?.Set("routeAttempts",attempt+1);o.Observation?.Set("unreachable",buildings.Count);o.Observation?.Set("searchCalls",searchCalls);o.Observation?.Set("searchNodes",searchNodes);o.Observation?.Set("searchVisits",searchVisits);o.Observation?.Set("searchLimits",searchLimits);foreach(var reason in rejectedReasons)o.Observation?.Set("reject"+reason.Key.Substring(reason.Key.LastIndexOf('.')+1),reason.Value);
+   o.Diagnostic?.Invoke("routing attempt="+(attempt+1)+" branch=false reasons="+string.Join(",",rejectedReasons.Select(q=>q.Key+":"+q.Value)));continue;}
    // Linking gates is optional. Later retries reserve space for buildings first.
    int gateLinks=0;
    if(attempt<4)foreach(var anchor in Anchors.Skip(1)){var link=Find(anchor,Anchors.Take(1).ToList());if(link!=null){Add(link);gateLinks++;}}
@@ -99,6 +101,8 @@ public sealed class TowerRouting {
    if(path==null){Reject("AP.LayoutReason.Search");connected.Remove(reservedFront);p.Routes.Remove(reservedFront);unreachable.Add(lot);continue;}
    if(path.Count>0)Add(path);
   }
+   o.Observation?.Set("routeAttempts",attempt+1);o.Observation?.Set("unreachable",unreachable.Count);o.Observation?.Set("searchCalls",searchCalls);o.Observation?.Set("searchNodes",searchNodes);o.Observation?.Set("searchVisits",searchVisits);o.Observation?.Set("searchLimits",searchLimits);foreach(var reason in rejectedReasons)o.Observation?.Set("reject"+reason.Key.Substring(reason.Key.LastIndexOf('.')+1),reason.Value);
+   o.Diagnostic?.Invoke("routing attempt="+(attempt+1)+" buildings="+buildings.Count+" unreachable="+unreachable.Count+" routes="+p.Routes.Count+" searchCalls="+searchCalls+" gridNodes="+searchNodes+" visited="+searchVisits+" searchLimits="+searchLimits+" reasons="+string.Join(",",rejectedReasons.Select(q=>q.Key+":"+q.Value)));
    if(unreachable.Count>0)continue;
 
    // Optional second faces cannot consume the space needed by another frontage.
@@ -117,16 +121,18 @@ public sealed class TowerRouting {
  static bool IsLine(PlanBezier c)=>Math.Abs(Layout.Cross(c.D-c.A,c.B-c.A))<.001&&Math.Abs(Layout.Cross(c.D-c.A,c.C-c.A))<.001;
  sealed class State {public int Node,Dir;public double Run,Cost;public State Prev;}
  List<PlanBezier> Find(Point start,List<Point> targets){
+  searchCalls++;
+  using(var timing=LayoutFunctionTiming.Start(o.FunctionTiming,"TowerRouting.Find")){
   if(targets.Count==0)return null;if(targets.Any(t=>(t-start).Length<.01))return new List<PlanBezier>();
   var all=poly.Select(UV).ToList();var special=targets.Concat(new[]{start}).Concat(fronts.SelectMany(f=>new[]{f.A,f.D})).Select(UV).ToList();double spacing=8;
   var xs=special.Select(q=>q.X).Concat(Enumerable.Range(0,Math.Max(1,(int)Math.Ceiling((all.Max(q=>q.X)-all.Min(q=>q.X))/spacing))).Select(i=>all.Min(q=>q.X)+i*spacing)).Select(x=>Math.Round(x,4)).Distinct().OrderBy(x=>x).ToArray();
   var ys=special.Select(q=>q.Y).Concat(Enumerable.Range(0,Math.Max(1,(int)Math.Ceiling((all.Max(q=>q.Y)-all.Min(q=>q.Y))/spacing))).Select(i=>all.Min(q=>q.Y)+i*spacing)).Select(x=>Math.Round(x,4)).Distinct().OrderBy(x=>x).ToArray();
-  int nx=xs.Length,ny=ys.Length;var nodes=new Point[nx*ny];for(int x=0;x<nx;x++)for(int y=0;y<ny;y++)nodes[x*ny+y]=XY(new Point(xs[x],ys[y]));
+  int nx=xs.Length,ny=ys.Length;searchNodes+=(long)nx*ny;var nodes=new Point[nx*ny];for(int x=0;x<nx;x++)for(int y=0;y<ny;y++)nodes[x*ny+y]=XY(new Point(xs[x],ys[y]));
   int Index(Point q){var uv=UV(q);return Array.IndexOf(xs,Math.Round(uv.X,4))*ny+Array.IndexOf(ys,Math.Round(uv.Y,4));}
   int source=Index(start);var goals=new HashSet<int>(targets.Select(Index));var queue=new SortedSet<Tuple<double,int,State>>(Comparer<Tuple<double,int,State>>.Create((a,b)=>{int c=a.Item1.CompareTo(b.Item1);return c!=0?c:a.Item2.CompareTo(b.Item2);}));int serial=0;var cost=new Dictionary<(int,int,double),double>();var turnCache=new Dictionary<(int,int,int),bool>();var heuristics=new double?[nodes.Length];var edgeCache=new Dictionary<long,bool>();double minrun=2*r["RoadRadius"]+r["CurveGap"];
   void Push(State s){var key=(s.Node,s.Dir,Math.Round(Math.Min(minrun,s.Run),1));if(cost.TryGetValue(key,out var old)&&old<=s.Cost)return;cost[key]=s.Cost;double h=heuristics[s.Node]??(heuristics[s.Node]=targets.Min(t=>(nodes[s.Node]-t).Length)).Value;queue.Add(Tuple.Create(s.Cost+h,serial++,s));}
   Push(new State{Node=source,Dir=-1,Run=minrun});int iterations=0;
-  while(queue.Count>0&&iterations++<150000){if(iterations%500==0)o.Cancellation.ThrowIfCancellationRequested();var item=queue.Min;queue.Remove(item);var s=item.Item3;
+  while(queue.Count>0&&iterations++<150000){searchVisits++;if(iterations%500==0)o.Cancellation.ThrowIfCancellationRequested();var item=queue.Min;queue.Remove(item);var s=item.Item3;
    if(goals.Contains(s.Node)){
     var pts=new List<Point>();for(var a=s;a!=null;a=a.Prev)pts.Add(nodes[a.Node]);pts.Reverse();for(int i=pts.Count-2;i>0;i--)if(Math.Abs(Layout.Cross(VillaGeometry.Unit(pts[i]-pts[i-1]),VillaGeometry.Unit(pts[i+1]-pts[i])))<.001)pts.RemoveAt(i);
     var cs=TowerGeometry.Fillet(pts,r["RoadRadius"],false,r["CurveGap"]);if(cs!=null&&Clear(TowerGeometry.Route(cs,"aisle",o.ParkingAisle)))return cs;continue;
@@ -137,7 +143,8 @@ public sealed class TowerRouting {
     if(turn){var turnKey=(s.Node,s.Dir,d);if(!turnCache.TryGetValue(turnKey,out bool turnClear)){var incoming=VillaGeometry.Unit(a-nodes[s.Prev.Node]);var outgoing=VillaGeometry.Unit(b-a);var cs=TowerGeometry.Fillet(new[]{a-incoming*(r["RoadRadius"]+1),a,a+outgoing*(r["RoadRadius"]+1)},r["RoadRadius"],false);turnClear=cs!=null&&Clear(TowerGeometry.Route(cs,"aisle",o.ParkingAisle));turnCache[turnKey]=turnClear;}if(!turnClear)continue;}
     double length=(b-a).Length;Push(new State{Node=j,Dir=d,Run=turn?length:Math.Min(minrun,s.Run+length),Cost=s.Cost+length+(turn?4:0),Prev=s});
    }
-  }return null;
+  }if(queue.Count>0)searchLimits++;return null;
+  }
  }
 }
 }

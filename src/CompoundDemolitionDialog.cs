@@ -7,8 +7,8 @@ public partial class PlanSystem {
  void ConfirmCompoundDemolition(bool force=false){
   var tool=World.GetExistingSystemManaged<ConstructionTool>();
   if(tool!=null&&compoundDialogRun!=tool.RunGeneration)compoundDialogOpen=false;
-  if(compoundDialogOpen||World.GetExistingSystemManaged<ToolSystem>()?.activeTool!=tool||tool==null||!tool.Demolishing||(force?!tool.CanForceDemolition:!tool.Valid))return;
-  int run=tool.RunGeneration,id=tool.DemolitionPlan;var stored=Saved.Find(p=>p.Info.Number==id);if(stored==null)return;var entity=stored.Entity;
+  if(compoundDialogOpen||World.GetExistingSystemManaged<ToolSystem>()?.activeTool!=tool||tool==null||!tool.Demolishing||(force?!tool.CanForceDemolition:!tool.Valid&&!tool.CanForceDemolition))return;
+  int run=tool.RunGeneration,id=tool.DemolitionPlan;if(!force&&ReplacingCompound(id)&&!tool.Valid)return;var stored=Saved.Find(p=>p.Info.Number==id);if(stored==null)return;var entity=stored.Entity;
   compoundDialogOpen=true;compoundDialogRun=run;
   try{GameManager.instance.userInterface.appBindings.ShowConfirmationDialog(new ConfirmationDialog("AP.DemolishDialogTitle",ReplacingCompound(id)?"AP.ReplaceCompoundMessage":force?"AP.ForceDemolishMessage":"AP.DemolishDialogMessage","Common.DIALOG_ACTION[Yes]","Common.DIALOG_ACTION[No]"),answer=>{
    if(compoundDialogRun!=run)return;
@@ -22,7 +22,7 @@ public partial class PlanSystem {
   var tool=World.GetExistingSystemManaged<ConstructionTool>();
   if(tool==null||World.GetExistingSystemManaged<ToolSystem>()?.activeTool!=tool||!tool.Demolishing||tool.RunGeneration!=run||tool.DemolitionPlan!=id)return;
   Trace.Event("plan.demolition.confirmed","id="+id+" answer="+answer);
-  if(answer==0){if(parts[3]=="1")tool.RequestForceDemolition();else tool.Apply();}else if(parts[3]!="1"){CancelCompoundReplacement();Activate();} // Force-delete cancellation keeps the blocked preview and retry icon.
+  if(answer==0){if(parts[3]=="1"||!ReplacingCompound(id))tool.RequestForceDemolition();else tool.Apply();}else if(parts[3]!="1"){CancelCompoundReplacement();Activate();} // Force-delete cancellation keeps the blocked preview and retry icon.
  }
 }
 }

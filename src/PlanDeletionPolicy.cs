@@ -3,6 +3,11 @@ using System.Collections.Generic;
 using System.Linq;
 namespace ApartmentPlan {
 public static class PlanDeletionPolicy {
+ public static HashSet<T> Isolated<T>(IEnumerable<T> candidates,Func<T,IEnumerable<T>> neighbours){
+  var retained=new HashSet<T>(candidates);bool changed;
+  do{changed=false;foreach(var e in retained.ToArray())if(neighbours(e).Any(n=>!retained.Contains(n))){retained.Remove(e);changed=true;}}while(changed);
+  return retained;
+ }
  public static IEnumerable<T> ForceTargets<T>(IEnumerable<T> requested,HashSet<T> owned,HashSet<T> other,Func<T,bool> live)=>requested.Where(e=>live(e)&&owned.Contains(e)&&!other.Contains(e)).Distinct();
  public static List<T> OldestForNewPlan<T>(IEnumerable<T> plans,int maximum,Func<T,int> number,Func<T,bool> eligible){var all=plans.ToList();return all.Where(eligible).OrderBy(number).Take(Math.Max(0,all.Count-maximum+1)).ToList();}
  public static int Target(bool open,int editing,int selected)=>!open?selected:editing>=0?editing:-2;

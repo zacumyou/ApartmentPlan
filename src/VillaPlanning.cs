@@ -114,6 +114,7 @@ public partial class PlanSystem {
    if(!int.TryParse(value,out int mode)||mode<0||mode>2||mode==Mod.Options.PlanMode)return true;
    // Switching tabs preserves each unfinished draft, including connection exclusions.
    modeDrafts[Mod.Options.PlanMode]=new PlanEditData{Boundary=Boundary.ToList(),Entrances=Entrances.ToList(),Zones=Zones.ToList(),Ramps=Ramps.ToList(),Roads=Roads.ToList(),Draft=Draft,Selected=Selected.ToArray(),VillaConnections=VillaConnections.ToList(),NativeCommitted=NativeCommitted,EditingNumber=EditingPlan};
+   Trace.Event("plan.mode.changed","from="+Mod.Options.PlanMode+" to="+mode,Trace.LocalTower);
    CancelLayout();Mod.Options.PlanMode=mode;Command("new","");Selected.Clear();
    if(modeDrafts.TryGetValue(mode,out var d)){
     Boundary.AddRange(d.Boundary);Entrances.AddRange(d.Entrances);Zones.AddRange(d.Zones);Ramps.AddRange(d.Ramps);Roads.AddRange(d.Roads);VillaConnections.AddRange(d.VillaConnections);foreach(var id in d.Selected)Selected.Add(id);Draft=d.Draft;NativeCommitted=d.NativeCommitted;EditingPlan=d.EditingNumber;
