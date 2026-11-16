@@ -1,3 +1,15 @@
+# 0.1.132
+
+## 한국어
+- 탑상형 단지에서 선택한 여러 건물 에셋이 더 고르게 배치됩니다.
+- 일부 탑상형 단지에서 내부 도로를 연결하지 못하던 문제를 개선했습니다.
+- 계획도를 만들기 어려울 때 조정할 항목을 더 알기 쉽게 안내합니다.
+
+## English
+- Tower compounds now use a better mix of selected building assets.
+- Improved internal road planning for tower layouts that previously failed to connect.
+- Clearer guidance when a layout cannot be generated.
+
 # 0.1.131
 
 ## 한국어
@@ -67,3 +79,4 @@
 0.1.70: Open-space parking infill with 2xTwoway approaches and 1xTwoway inner aisles; confirmed compound replacement; edge vertex insertion; unsaved-close confirmation; UI layout, number formatting and animation improvements. / 유휴부지 주차 보충·단지 재배치·변 위 점 추가·닫기 확인·UI 개선.
 
 Build and targeted layout/ownership/serialization checks passed. In-game verification of these changes is pending.
+

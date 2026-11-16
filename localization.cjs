@@ -1,4 +1,4 @@
-const fs=require('fs'),path=require('path');const root=__dirname;const en={},ko={};function add(k,e,v){en[k]=e;ko[k]=v}
+﻿const fs=require('fs'),path=require('path');const root=__dirname;const en={},ko={};function add(k,e,v){en[k]=e;ko[k]=v}
 add('AP.Option.GenerateSurfaceParking','Generate surface parking (slab apartments)','지상 주차장 생성 (판상형 아파트)');
 add('AP.Desc.GenerateSurfaceParking','Turn off to omit generated parking bays. Building access roads and paths remain. Parking built into selected assets is unchanged.','끄면 계획도의 주차면을 생성하지 않습니다. 건물 진입 도로와 보행로는 유지되며, 선택한 에셋 자체에 포함된 주차장은 바뀌지 않습니다.');
 add('AP.ReflowNoSpace','No safe space and connected access road could be found around this building.','주변 유휴부지에서 건물과 연결 도로가 함께 들어갈 자리를 찾지 못했습니다.');
@@ -444,7 +444,7 @@ add('AP.LayoutReason.Parallel','Parallel road clearance','평행도로 이격');
 add('AP.LayoutReason.Search','No route found under current rules','현재 조건 내 연결 경로 탐색 실패');
 add('AP.DeleteAllPlans','Delete all plans','계획도 전체 삭제');
 add('AP.DeleteAllPlansMessage','Remove all saved plans from the list? Constructed buildings and roads will remain. Compound management records are retained.','저장 목록의 계획도를 모두 삭제할까요? 배치된 건물과 도로는 삭제하지 않으며, 단지 관리 정보는 보존합니다.');
-add('AP.Tower.RoutingRetryFit','No road layout met the clearance rules after eight routing orders. Buildings and gates were preserved. Adjust road clearance or the site.','건물과 게이트를 유지하여 도로 순서를 8회 재탐색했으나 이격 조건을 만족하지 못했습니다. 도로 이격 설정이나 구역을 조정하세요.');
+add('AP.Tower.RoutingRetryFit','Could not find internal roads connecting the buildings and entrances. Try increasing building spacing or choosing smaller buildings.','건물과 입구를 연결할 내부 도로 배치를 찾지 못했습니다. 건물 간격을 늘리거나 더 작은 건물을 선택해 보세요.');
 add('AP.Tower.Rule.TurnaroundGap','Turnaround road edge gap (m)','회차도로 가장자리 간격 (m)');
 add('AP.Tower.Rule.WalkParallelGap','Parallel walk edge gap (m)','평행 보도 가장자리 간격 (m)');
 add('AP.Fill','Fill area','Fill 구역 찾기');

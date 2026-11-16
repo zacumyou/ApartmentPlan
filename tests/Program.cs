@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using ApartmentPlan;
@@ -174,6 +174,7 @@ if(args.Length>0&&(args[0]=="--performance"||args[0]=="--performance-timing"||ar
  }return;}
 if(args.Length>0&&args[0]=="--villa-existing"){VillaTests.ExistingRoads();return;}
 if(args.Length>0&&args[0]=="--villa-junction"){ConstructionTests.VillaJunction();ConstructionTests.VillaNodeSimplify();return;}
+if(args.Length>0&&args[0]=="--tower-feedback"){TowerFeedbackTests.Run();return;}
 if(args.Length>0&&args[0]=="--tower"){TowerTests.Run();return;}
 if(args.Length>0&&args[0]=="--compound-road-policy"){
  PlanBezier Line(double x,double y,double xx,double yy){var a=new Point(x,y);var d=new Point(xx,yy);return new PlanBezier{A=a,B=a+(d-a)*(1d/3),C=a+(d-a)*(2d/3),D=d};}

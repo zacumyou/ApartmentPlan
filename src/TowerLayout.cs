@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Collections.Generic;
 namespace ApartmentPlan {
@@ -85,17 +85,46 @@ public static class TowerLayout {
    }}
   o.Diagnostic?.Invoke("candidates accepted="+candidates.Count+" attempted="+attempted+" boundaryOrZone="+boundaryRejected+" facingOrCourt="+courtRejected+" frontOrEscape="+frontRejected);
   o.Observation?.Set("candidates",candidates.Count);Stage("packing");
-  List<Parcel> best=new List<Parcel>();
-  // Multiple deterministic sweeps permit staggered lines without moving a single tower into an unsafe gap.
-  for(int sweep=0;sweep<16;sweep++){double a=sweep*Math.PI/8;var axis=new Point(Math.Cos(a),Math.Sin(a));var chosen=new List<Parcel>();foreach(var candidate in candidates.OrderBy(q=>SiteFrame.Dot(new Point(q.X+q.W/2,q.Y+q.D/2),axis)).ThenBy(q=>q.AssetId)){
-    if(chosen.Count>=rules["MaxBuildings"])break;if(chosen.Any(q=>TowerGeometry.Distance(q.PlacementOutline,candidate.PlacementOutline)<gap-.001))continue;chosen.Add(candidate);
-   }if(chosen.Count>best.Count)best=chosen;}
+  var packings=new List<List<Parcel>>();var packingKeys=new HashSet<string>();
+  var candidateIndex=candidates.Select((q,i)=>new{q,i}).ToDictionary(x=>x.q,x=>x.i);
+  var candidateGroups=candidates.GroupBy(q=>q.AssetId).OrderBy(g=>g.Key,StringComparer.Ordinal).ToList();
+  // Select the least-used feasible asset, then its next spatial candidate.
+  // Rejected candidates never become feasible as the packing only grows, so
+  // each queue is consumed once per sweep instead of rescanning the full list.
+  for(int sweep=0;sweep<16;sweep++){
+   o.Cancellation.ThrowIfCancellationRequested();double a=sweep*Math.PI/8;var axis=new Point(Math.Cos(a),Math.Sin(a));var chosen=new List<Parcel>();var counts=new Dictionary<string,int>();
+   var queues=candidateGroups.ToDictionary(g=>g.Key,g=>g.OrderBy(q=>SiteFrame.Dot(new Point(q.X+q.W/2,q.Y+q.D/2),axis)).ToArray());
+   var offsets=candidateGroups.ToDictionary(g=>g.Key,g=>0);
+   while(chosen.Count<rules["MaxBuildings"]){
+    o.Cancellation.ThrowIfCancellationRequested();Parcel next=null;
+    foreach(var group in candidateGroups.OrderBy(g=>counts.TryGetValue(g.Key,out var count)?count:0)){
+     var queue=queues[group.Key];
+     while(offsets[group.Key]<queue.Length){var candidate=queue[offsets[group.Key]++];if(chosen.Any(q=>TowerGeometry.Distance(q.PlacementOutline,candidate.PlacementOutline)<gap-.001))continue;next=candidate;break;}
+     if(next!=null)break;
+    }
+    if(next==null)break;chosen.Add(next);counts[next.AssetId]=counts.TryGetValue(next.AssetId,out var count)?count+1:1;
+   }
+   string key=string.Join(",",chosen.Select(q=>candidateIndex[q]).OrderBy(i=>i));if(packingKeys.Add(key))packings.Add(chosen);
+  }
   long packingMs=timer.ElapsedMilliseconds;
-  lots.AddRange(best);p.Parcels.AddRange(best);
-  o.Diagnostic?.Invoke("packing selected="+best.Count+" candidates="+candidates.Count);o.Observation?.Set("packed",best.Count);Stage("routing");
-  var router=new TowerRouting(p,poly,lots,courts.Select(c=>c.Stem).Concat(zonesLocal).ToList(),right,forward,o,rules);
-  foreach(var court in courts)router.Anchors.Add(court.Anchor);
-  router.Build(best);Stage("frontJoins");TowerFrontJoins.Apply(p,poly,lots,courts.Select(c=>c.Stem).Concat(zonesLocal).ToList(),o,rules,assets);if(best.Count==0)throw new ArgumentException("AP.Tower.ConnectionFit");
+  List<Parcel> best=null;int routeBase=p.Routes.Count,packingAttempts=0;ArgumentException routingFailure=null;
+  // A maximum-count packing is not necessarily road-connectable. Try a bounded
+  // set of distinct, complete alternatives before rejecting the plan. Never
+  // drop individual disconnected buildings or relax road-clearance checks.
+  foreach(var packing in packings.OrderByDescending(q=>q.Count).ThenByDescending(q=>q.Select(l=>l.AssetId).Distinct().Count()).Take(3)){
+   packingAttempts++;best=packing;lots.AddRange(best);p.Parcels.AddRange(best);
+   o.Diagnostic?.Invoke("packing attempt="+packingAttempts+" selected="+best.Count+" assetKinds="+best.Select(q=>q.AssetId).Distinct().Count()+" alternatives="+packings.Count);o.Observation?.Set("packed",best.Count);Stage("routing");
+   var router=new TowerRouting(p,poly,lots,courts.Select(c=>c.Stem).Concat(zonesLocal).ToList(),right,forward,o,rules);
+   foreach(var court in courts)router.Anchors.Add(court.Anchor);
+   try{router.Build(best);routingFailure=null;break;}
+   catch(ArgumentException e) when(e.Message=="AP.Tower.RoutingRetryFit"){
+    routingFailure=e;lots.RemoveAll(q=>best.Contains(q));p.Parcels.RemoveAll(q=>best.Contains(q));p.Routes.RemoveRange(routeBase,p.Routes.Count-routeBase);
+   }
+  }
+  if(routingFailure!=null)throw routingFailure;
+  if(best==null||best.Count==0)throw new ArgumentException("AP.Tower.ConnectionFit");
+  p.Diagnostics+=" packingAttempts="+packingAttempts;
+  Stage("frontJoins");TowerFrontJoins.Apply(p,poly,lots,courts.Select(c=>c.Stem).Concat(zonesLocal).ToList(),o,rules,assets);
   Stage("overlayRibbons");
   // Build preview ribbons from the same analytic routes used for native construction.
   foreach(var route in p.Routes){var overlay=route.Curves.SelectMany(c=>VillaGeometry.Sample(c,4)).ToList();for(int i=1;i<overlay.Count;i++){var a=overlay[i-1];var b=overlay[i];if((b-a).Length<.001)continue;var shape=VillaGeometry.Box((a+b)*.5,VillaGeometry.Unit(b-a),route.Width,(b-a).Length);var parcel=VillaGeometry.Bounds(shape,route.Use=="pedestrian"?9:1);parcel.InvisibleRoad=route.Use=="turnaround";parcel.PlacementOutline=shape;p.Parcels.Add(parcel);}}
@@ -113,3 +142,4 @@ public static class TowerLayout {
  }
 }
 }
+

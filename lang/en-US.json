@@ -527,7 +527,7 @@
   "AP.LayoutReason.Search": "No route found under current rules",
   "AP.DeleteAllPlans": "Delete all plans",
   "AP.DeleteAllPlansMessage": "Remove all saved plans from the list? Constructed buildings and roads will remain. Compound management records are retained.",
-  "AP.Tower.RoutingRetryFit": "No road layout met the clearance rules after eight routing orders. Buildings and gates were preserved. Adjust road clearance or the site.",
+  "AP.Tower.RoutingRetryFit": "Could not find internal roads connecting the buildings and entrances. Try increasing building spacing or choosing smaller buildings.",
   "AP.Tower.Rule.TurnaroundGap": "Turnaround road edge gap (m)",
   "AP.Tower.Rule.WalkParallelGap": "Parallel walk edge gap (m)",
   "AP.Fill": "Fill area",

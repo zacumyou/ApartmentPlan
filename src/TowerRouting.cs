@@ -83,15 +83,18 @@ public sealed class TowerRouting {
  PlanRoute Add(List<PlanBezier> cs){var route=TowerGeometry.Route(cs,"aisle",o.ParkingAisle);connected.Add(route);p.Routes.Add(route);return route;}
  public void Build(List<Parcel> buildings){
   foreach(var lot in buildings){var v=lot.PlacementForward??this.v;var u=new Point(-v.Y,v.X);var c=new Point(lot.X+lot.W/2,lot.Y+lot.D/2);var mid=c+v*(lot.D/2+o.ParkingAisle/2);fronts.Add(TowerGeometry.Line(mid-u*Math.Max(1,lot.W/2-4),mid+u*Math.Max(1,lot.W/2-4)));}
-  int saved=p.Routes.Count;var rawAnchors=Anchors.ToArray();
+  int saved=p.Routes.Count;var rawAnchors=Anchors.ToArray();var triedOrders=new HashSet<string>();
   for(int attempt=0;attempt<8;attempt++){
    o.Cancellation.ThrowIfCancellationRequested();connected.Clear();p.Routes.RemoveRange(saved,p.Routes.Count-saved);
    Anchors.Clear();Anchors.AddRange(rawAnchors);if(!PrepareBranches(attempt)){o.Observation?.Set("routeAttempts",attempt+1);o.Observation?.Set("unreachable",buildings.Count);o.Observation?.Set("searchCalls",searchCalls);o.Observation?.Set("searchNodes",searchNodes);o.Observation?.Set("searchVisits",searchVisits);o.Observation?.Set("searchLimits",searchLimits);foreach(var reason in rejectedReasons)o.Observation?.Set("reject"+reason.Key.Substring(reason.Key.LastIndexOf('.')+1),reason.Value);
    o.Diagnostic?.Invoke("routing attempt="+(attempt+1)+" branch=false reasons="+string.Join(",",rejectedReasons.Select(q=>q.Key+":"+q.Value)));continue;}
+   var pending=buildings.OrderBy(l=>attempt<4?Anchors.Min(a=>(a-l.Access.Value).Length):SiteFrame.Dot(new Point(l.X,l.Y),new Point(Math.Cos((attempt-2)*Math.PI/3),Math.Sin((attempt-2)*Math.PI/3)))).ToList();
+   string orderKey=(attempt<4&&Anchors.Count>1?"links:":"noLinks:")+string.Join(";",Anchors.Select(a=>a.X.ToString("R",System.Globalization.CultureInfo.InvariantCulture)+","+a.Y.ToString("R",System.Globalization.CultureInfo.InvariantCulture)))+":"+string.Join(",",pending.Select(l=>buildings.IndexOf(l)));
+   if(!triedOrders.Add(orderKey))continue;
    // Linking gates is optional. Later retries reserve space for buildings first.
    int gateLinks=0;
    if(attempt<4)foreach(var anchor in Anchors.Skip(1)){var link=Find(anchor,Anchors.Take(1).ToList());if(link!=null){Add(link);gateLinks++;}}
-   var pending=buildings.OrderBy(l=>attempt<4?Anchors.Min(a=>(a-l.Access.Value).Length):SiteFrame.Dot(new Point(l.X,l.Y),new Point(Math.Cos((attempt-2)*Math.PI/3),Math.Sin((attempt-2)*Math.PI/3)))).ToList();var unreachable=new List<Parcel>();
+   var unreachable=new List<Parcel>();
   // Reserve fronts before connecting so one connector cannot steal another building's frontage.
   foreach(var lot in pending){o.Cancellation.ThrowIfCancellationRequested();var v=lot.PlacementForward??this.v;var u=new Point(-v.Y,v.X);var c=new Point(lot.X+lot.W/2,lot.Y+lot.D/2);var mid=c+v*(lot.D/2+o.ParkingAisle/2);var a=mid-u*Math.Max(1,lot.W/2-4);var b=mid+u*Math.Max(1,lot.W/2-4);
    var targets=Anchors.Concat(connected.SelectMany(q=>q.Curves.Where(IsLine).SelectMany(z=>new[]{z.A,z.D,(z.A+z.D)*.5}))).Where(q=>Anchors.All(a=>(a-q).Length<.001||(a-q).Length>=r["BranchGap"]+o.ParkingAisle/2)).ToList();List<PlanBezier> path=null;

@@ -527,7 +527,7 @@
   "AP.LayoutReason.Search": "현재 조건 내 연결 경로 탐색 실패",
   "AP.DeleteAllPlans": "계획도 전체 삭제",
   "AP.DeleteAllPlansMessage": "저장 목록의 계획도를 모두 삭제할까요? 배치된 건물과 도로는 삭제하지 않으며, 단지 관리 정보는 보존합니다.",
-  "AP.Tower.RoutingRetryFit": "건물과 게이트를 유지하여 도로 순서를 8회 재탐색했으나 이격 조건을 만족하지 못했습니다. 도로 이격 설정이나 구역을 조정하세요.",
+  "AP.Tower.RoutingRetryFit": "건물과 입구를 연결할 내부 도로 배치를 찾지 못했습니다. 건물 간격을 늘리거나 더 작은 건물을 선택해 보세요.",
   "AP.Tower.Rule.TurnaroundGap": "회차도로 가장자리 간격 (m)",
   "AP.Tower.Rule.WalkParallelGap": "평행 보도 가장자리 간격 (m)",
   "AP.Fill": "Fill 구역 찾기",
