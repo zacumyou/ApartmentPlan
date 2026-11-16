@@ -14,7 +14,7 @@ public partial class ConstructionTool {
  }
  void ClearEvidence(){jointDiagnosticsByEntity.Clear();failureEvidence.Clear();evidenceTotal=0;}
  int EvidenceKind(Entity e){if(!EntityManager.Exists(e))return 0;if(EntityManager.HasComponent<Game.Net.Edge>(e))return 1;if(EntityManager.HasComponent<Game.Net.Node>(e))return 2;if(EntityManager.HasComponent<Game.Buildings.Building>(e))return 3;if(EntityManager.HasComponent<Game.Objects.Tree>(e))return 4;if(EntityManager.HasBuffer<Game.Areas.Node>(e))return 5;return 6;}
- void Evidence(Entity e,int reason,int flags=0){
+ void Evidence(Entity e,int reason,int flags=0,Dictionary<string,int> detail=null){
   evidenceTotal++;if(failureEvidence.Count>=24)return;
   var record=new Dictionary<string,int>{{"reason",reason},{"ordinal",evidenceTotal},{"kind",EvidenceKind(e)},{"flags",flags}};
   if(EntityManager.Exists(e)){
@@ -30,6 +30,7 @@ public partial class ConstructionTool {
     if(EntityManager.HasComponent<ToolErrorData>(p)){record["errorCode"]=(int)EntityManager.GetComponentData<ToolErrorData>(p).m_Error;break;}
    }
   }
+  if(detail!=null)foreach(var pair in detail)record[pair.Key]=pair.Value;
   failureEvidence.Add(record);
   if(reason==1&&jointDiagnosticsByEntity.TryGetValue(e,out var joint)){
    int ordinal=evidenceTotal;evidenceTotal++;

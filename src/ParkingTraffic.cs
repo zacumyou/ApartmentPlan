@@ -5,6 +5,7 @@ namespace ApartmentPlan {
 public sealed class ParkingConnection {
  public Parcel Bay,Aisle;public int EntrySide;public bool Valid;
  [Newtonsoft.Json.JsonIgnore] public int FailureFlags;
+ [Newtonsoft.Json.JsonIgnore] public Dictionary<string,int> CoverageEvidence;
  public string Failure="";public List<Point> Ports=new List<Point>();public List<Point> Route=new List<Point>();
 }
 // Planning topology and clearance only. This does not create native CarLane,
@@ -36,7 +37,7 @@ public static class ParkingTraffic {
   int[] dx={1,0,-1,0},dy={0,1,0,-1};for(int head=0;head<queue.Count;head++){int n=queue[head],x=n%nx,y=n/nx;for(int k=0;k<4;k++){int a=x+dx[k],b=y+dy[k];if(!clear(a,b)||parent[b*nx+a]!=-2)continue;parent[b*nx+a]=n;queue.Add(b*nx+a);}}
   int coverageSamples=0;
   foreach(var bay in plan.Parcels.Where(p=>p.Kind==2)){
-   int coverageFlags=0;
+   int coverageFlags=0;double bestMissing=double.MaxValue;
    var result=new ParkingConnection{Bay=bay,Failure="No full-width aisle with end clearance"};
    if(bay.ParkingSpaces<1||Math.Abs((bay.ParkingAlongX?bay.W:bay.D)-bay.ParkingSpaces*o.BayWidth)>.01||(bay.ParkingAlongX?bay.D:bay.W)<o.BayDepth-.001){result.Failure="Parking axis or stall dimensions inconsistent";plan.ParkingConnections.Add(result);plan.ParkingAccessFailures++;continue;}
    foreach(int side in new[]{-1,1}){
@@ -47,6 +48,11 @@ public static class ParkingTraffic {
      if(coverageSamples<24){
       var core=h?new Parcel{X=bay.X,Y=aisle.Y,W=bay.W,D=lane}:new Parcel{X=aisle.X,Y=bay.Y,W=lane,D=bay.D};
       coverageFlags|=Covered(core,roads)?32:16;
+      double missing=Math.Max(0,core.Area-roads.Sum(r=>OverlapArea(core,r)))/lane;
+      if(missing<bestMissing){bestMissing=missing;result.CoverageEvidence=new Dictionary<string,int>{
+       {"ownerKind",side},{"roadWidthCm",(int)Math.Round(lane*100)},{"marginCm",(int)Math.Round(end*100)},
+       {"coverageCm",(int)Math.Round(missing*100)},{"lengthCm",(int)Math.Round(Math.Max(0,aisle.Area-roads.Sum(r=>OverlapArea(aisle,r)))/lane*100)},
+       {"edges",roads.Count(r=>OverlapArea(core,r)>0)}};}
      }
      continue;
     }

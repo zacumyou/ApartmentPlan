@@ -35,6 +35,17 @@ public partial class PlanSystem {
   if(Status=="AP.CurveFit")metrics=new Dictionary<string,int>{{"DiagnosticVersion",2},{"EvidenceTotal",CurveEvidence.Count},{"EvidenceOmitted",0}};
   if(Status=="AP.EntranceFit")metrics=new Dictionary<string,int>{{"DiagnosticVersion",2},{"EvidenceTotal",EntranceEvidence.Count},{"EvidenceOmitted",0}};
   var evidence=Status=="AP.EntranceFit"?EntranceEvidence:Status=="AP.CurveFit"?CurveEvidence:Status=="AP.ManualRoadFit"?ManualRoadEvidence:Status=="AP.FrontageRecalculate"?FrontageEvidence:Status=="AP.NativeBlocked"?NativeFailureEvidence:null;
+  if(Status=="AP.RoadPackMissing"||Status=="AP.RoadAssetsInvalid"){
+   evidence=World.GetExistingSystemManaged<InvisibleRoadPrefabs>()?.SharedEvidence()??new List<Dictionary<string,int>>();
+   metrics=new Dictionary<string,int>{{"DiagnosticVersion",2},{"EvidenceTotal",evidence.Count},{"EvidenceOmitted",0}};
+  }
+  // A saved-shape limit is not the last construction result. Share the actual
+  // rejected quantity and limit rather than stale native preview metrics.
+  if(Status.StartsWith("AP.Limit",StringComparison.Ordinal)){
+   evidence=new List<Dictionary<string,int>>();
+   if(Status==limitStatus)evidence.Add(new Dictionary<string,int>{{"reason",90},{"ordinal",0},{"connected",(int)Math.Min(int.MaxValue,Math.Max(0,Math.Ceiling(limitCurrent)))},{"edges",(int)Math.Min(int.MaxValue,Math.Max(0,Math.Ceiling(limitMaximum)))}});
+   metrics=new Dictionary<string,int>{{"DiagnosticVersion",2},{"EvidenceTotal",evidence.Count},{"EvidenceOmitted",0}};
+  }
   if(evidence==null&&Status!="AP.NativeBlocked"&&Draft!=null&&(Draft.RequiredAccessFailures>0||Draft.ParkingAccessFailures>0)){
    evidence=PlanDiagnostics.Evidence(Draft,out int total);
    metrics=new Dictionary<string,int>{{"DiagnosticVersion",2},{"EvidenceTotal",total},{"EvidenceOmitted",Math.Max(0,total-evidence.Count)}};

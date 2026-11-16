@@ -1,3 +1,13 @@
+# 0.1.133
+
+## 한국어
+- 건설이나 주차장 배치가 막혔을 때, 공유 버튼으로 보내는 문제 보고에 원인 확인에 필요한 정보를 보강했습니다.
+- 저장 한도 초과 보고에 이전 건설 정보가 섞이던 문제를 수정했습니다.
+
+## English
+- Improved reports sent through the Share button to help investigate blocked construction and parking layouts.
+- Fixed storage-limit reports including unrelated information from an earlier construction attempt.
+
 # 0.1.132
 
 ## 한국어
@@ -79,4 +89,3 @@
 0.1.70: Open-space parking infill with 2xTwoway approaches and 1xTwoway inner aisles; confirmed compound replacement; edge vertex insertion; unsaved-close confirmation; UI layout, number formatting and animation improvements. / 유휴부지 주차 보충·단지 재배치·변 위 점 추가·닫기 확인·UI 개선.
 
 Build and targeted layout/ownership/serialization checks passed. In-game verification of these changes is pending.
-

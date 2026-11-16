@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.Collections.Generic;
 using Colossal.Mathematics;
@@ -50,17 +50,24 @@ public partial class ConstructionTool {
   if(road==Entity.Null||!EntityManager.Exists(road)||EntityManager.HasComponent<Deleted>(road)||!EntityManager.HasComponent<Game.Net.Edge>(road))return false;
   return !EntityManager.HasComponent<Temp>(road)||(EntityManager.GetComponentData<Temp>(road).m_Flags&TempFlags.Delete)==0;
  }
- bool HasFrontageCandidate(Entity building,SpatialLookup<FrontageCandidate> index){
+ bool HasFrontageCandidate(Entity building,SpatialLookup<FrontageCandidate> index,out int tested,out int eligible,out int rejected,out int nearestCm){
+  tested=eligible=rejected=0;nearestCm=-1;float nearest=float.MaxValue;
   var data=EntityManager.GetComponentData<BuildingData>(EntityManager.GetComponentData<PrefabRef>(building).m_Prefab);
-  if((data.m_Flags&Game.Prefabs.BuildingFlags.NoRoadConnection)!=0)return false;
+  if((data.m_Flags&Game.Prefabs.BuildingFlags.NoRoadConnection)!=0){rejected=1;return false;}
   var front=Game.Buildings.BuildingUtils.CalculateFrontPosition(EntityManager.GetComponentData<Game.Objects.Transform>(building),data.m_LotSize.y);
   foreach(var candidate in index.At(front.x,front.z)){
+   tested++;
    var curve=candidate.Curve;var flags=candidate.Flags;MathUtils.Distance(curve.xz,front.xz,out float t);
    var side=math.dot(MathUtils.Right(MathUtils.Tangent(curve,t).xz),front.xz-MathUtils.Position(curve,t).xz)>=0?flags.m_Right:flags.m_Left;
-   if((side&(CompositionFlags.Side.Raised|CompositionFlags.Side.Lowered))!=0)continue;
+   if((side&(CompositionFlags.Side.Raised|CompositionFlags.Side.Lowered))!=0){rejected|=2;continue;}
+   eligible++;
    var g=candidate.Geometry;
-   foreach(var boundary in new[]{g.m_Start.m_Left,g.m_Start.m_Right,g.m_End.m_Left,g.m_End.m_Right})if(MathUtils.Distance(boundary.xz,front.xz,out _) <8.4f)return true;
-  }return false;
+   foreach(var boundary in new[]{g.m_Start.m_Left,g.m_Start.m_Right,g.m_End.m_Left,g.m_End.m_Right}){float distance=MathUtils.Distance(boundary.xz,front.xz,out _);if(distance<8.4f)return true;nearest=math.min(nearest,distance);}
+   rejected|=4;
+  }
+  if(tested==0)rejected|=8;
+  if(nearest<float.MaxValue&&nearest<int.MaxValue/100f)nearestCm=(int)math.round(nearest*100);
+  return false;
  }
  IEnumerable<int> ValidateSteps(ValidationResult result){
   failureStage=4;ClearWarnings();ClearEvidence();Metrics.Clear();Metrics["ValidationCompleted"]=0;SetProgress(80);
@@ -104,10 +111,11 @@ public partial class ConstructionTool {
   foreach(var b in buildings){if(!PreviewExists(b)){Metrics["FailureFlags"]=16;result.Detail="Native preview changed during validation; reopen preview";yield break;}
    if(EntityManager.GetComponentData<Game.Buildings.Building>(b).m_RoadEdge!=Entity.Null)frontage++;
    var road=EntityManager.GetComponentData<Game.Buildings.Building>(b).m_RoadEdge;var draft=World.GetExistingSystemManaged<PlanSystem>()?.Draft;bool external=draft?.Villa==true&&road!=Entity.Null&&!VillaInternalRoad(road,draft);
-   bool geometric=!external&&HasFrontageCandidate(b,frontageIndex);
+   int tested=0,eligible=0,rejected=external?16:0,nearestCm=-1;
+   bool geometric=!external&&HasFrontageCandidate(b,frontageIndex,out tested,out eligible,out rejected,out nearestCm);
    bool nativeAccepted=draft?.Villa==true&&HasNativeFrontage(road);
    if(geometric||nativeAccepted){roadCandidates++;if(!geometric&&nativeAccepted)nativeFrontageAccepted++;}
-   else if(Mod.Options.RequireBuildingRoad||draft?.Villa==true){Evidence(b,3,(external?1:0)|(road==Entity.Null?2:0)|(!HasNativeFrontage(road)?4:0));WarningEntity(b,true);warningNotice="AP.Warning.Frontage";}yield return 0;
+   else if(Mod.Options.RequireBuildingRoad||draft?.Villa==true){Evidence(b,3,(external?1:0)|(road==Entity.Null?2:0)|(!HasNativeFrontage(road)?4:0),new Dictionary<string,int>{{"edges",tested},{"connected",eligible},{"ownerKind",rejected},{"coverageCm",nearestCm},{"marginCm",840}});WarningEntity(b,true);warningNotice="AP.Warning.Frontage";}yield return 0;
   }
   foreach(var bay in appliedBays){
    yield return 0;

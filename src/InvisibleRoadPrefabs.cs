@@ -38,6 +38,14 @@ public sealed partial class InvisibleRoadPrefabs:GameSystemBase {
  internal string UnavailableStatus=>entries.Count==0?"AP.RoadPackMissing":"AP.RoadAssetsInvalid";
  internal bool Available=>RequiredNames.All(IsReady);
  internal bool IsReady(string name)=>entries.TryGetValue(name,out var entry)&&entry.Ready;
+ internal List<Dictionary<string,int>> SharedEvidence(){
+  var result=new List<Dictionary<string,int>>();int ready=RequiredNames.Count(IsReady);
+  for(int i=0;i<RequiredNames.Length;i++){
+   bool found=entries.TryGetValue(RequiredNames[i],out var entry);if(found&&entry.Ready)continue;
+   result.Add(new Dictionary<string,int>{{"reason",91},{"ordinal",i},{"flags",(found?1:0)|(found&&entry.Checked?2:0)},
+    {"connected",ready},{"edges",RequiredNames.Length}});
+  }return result;
+ }
  internal string Diagnostic()=>Newtonsoft.Json.JsonConvert.SerializeObject(new{revision=Revision,missing=RequiredNames.Where(n=>!IsReady(n)),roads=entries.Select(p=>new{name=p.Key,ready=p.Value.Ready,checkedOnce=p.Value.Checked,audit=p.Value.Audit})});
  internal string Replacement(string source)=>entries.TryGetValue(Prefix+source,out var entry)&&entry.Ready?entry.Road.name:source;
  protected override void OnUpdate(){
@@ -134,4 +142,3 @@ public sealed partial class InvisibleRoadPrefabAudit:GameSystemBase {
  protected override void OnUpdate()=>World.GetOrCreateSystemManaged<InvisibleRoadPrefabs>().CompleteInitialization();
 }
 }
-

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Newtonsoft.Json;
@@ -10,7 +10,7 @@ public partial class PlanSystem {
  string failedLayoutStatus;
  readonly List<string> frontageDetails=new List<string>();
  static readonly HashSet<string> errorStatuses=new HashSet<string>{
-  "AP.Error","AP.RoadPackMissing","AP.CatalogFailed","AP.NetworkUnavailable","AP.FrontageRecalculate","AP.NativeBlocked",
+  "AP.Error","AP.RoadPackMissing","AP.RoadAssetsInvalid","AP.CatalogFailed","AP.NetworkUnavailable","AP.FrontageRecalculate","AP.NativeBlocked",
   "AP.ParkingDecalMissing","AP.ParkingDecalRecalculate","AP.AccessIncomplete","AP.ParkingAccessIncomplete",
   "AP.InvalidBoundary","AP.InvalidAsset","AP.EntranceFit","AP.CurveFit","AP.ZoneFit","AP.ManualRoadFit",
   "AP.ReplacementFit","AP.ReplacementFar","AP.ReplacementParking","AP.NoBuildingFit","AP.NeedBuildings",
