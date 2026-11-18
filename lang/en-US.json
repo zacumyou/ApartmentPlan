@@ -42,6 +42,7 @@
   "AP.ComingSoon": "Coming soon",
   "AP.Tower.Tab": "Tower APT",
   "AP.Tower.SelectParking": "Choose a parking asset for every entrance.",
+  "AP.Tower.ParkingSearchDefault": "parking",
   "AP.Tower.ParkingSearch": "Parking asset search",
   "AP.Tower.Parking": "Entrance parking asset",
   "AP.Tower.Choose": "Choose an asset",

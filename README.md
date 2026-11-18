@@ -1,4 +1,4 @@
-# Apartment Plan 0.1.133
+# Apartment Plan 0.1.138
 
 판상형·탑상형 아파트와 빌라 단지 제작을 지원합니다. Slab, tower and villa compound planning.
 
@@ -670,3 +670,4 @@ PLT와 구역 그리기 흐름/가이드 표현을 맞췄지만 자체 구현이
 일반 `./build.ps1 -SkipLayoutTests` 빌드는 상세 계산 시간 로깅이 켜진 로컬 테스트용입니다. `-LocalDiagnostics`도 같은 동작입니다. 설치 후 게임에서 계획도를 계산하면 Logs/ApartmentPlan/*.log에 `layout.localTiming`으로 실행 ID, 단계별 시간(ms), 총시간 및 실패/취소를 기록합니다. 별도 DebugLogging 활성화는 필요 없습니다.
 
 공개 패키지는 반드시 `./build.ps1 -SkipLayoutTests -PublicRelease`로 생성하고 DLL 메타데이터 `ApartmentPlan.LocalLayoutTiming=false`를 확인합니다. 로컬 ZIP이나 `LOCAL-DIAGNOSTICS-DO-NOT-PUBLISH.txt`가 있는 패키지는 게시하지 않습니다. 공개 게시 성공과 ALL VERSIONS 등록 확인 후에는 일반 빌드로 로컬 계측판을 다시 만들고 게임 종료 상태에서 설치합니다. 게임 실행 중이면 설치 대기로 남깁니다. 공개 게시 승인은 별도로 필요합니다.
+

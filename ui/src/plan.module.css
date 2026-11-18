@@ -219,3 +219,101 @@
 .savedRow { display:flex; flex-direction:row; align-items:stretch; margin-bottom:8rem; }
 .savedRow .disclosure { flex:1; min-width:0; margin:0; }
 .savedRow .deletePlan { flex-shrink:0; margin-left:8rem; height:auto; min-height:44rem; }
+
+/* Shared panel baseline: calm dark surfaces, restrained outlines, one primary action.
+   AP keeps its 480rem width and established three-column tool order. */
+.panel, .panel * { font-family:"Noto Sans KR",sans-serif; }
+.panel { border:0; border-radius:20rem; font-size:15rem; background-color:rgba(24,25,30,.97); color:#eceef3; box-shadow:0 12rem 32rem rgba(0,0,0,.24); }
+.panel .header { padding:18rem 24rem; min-height:68rem; border:0; background:transparent; }
+.panel .header strong { font-size:23rem; letter-spacing:0; color:#f2f3f6; }
+.panel .body { padding:8rem 24rem 24rem; }
+.panel .small { width:32rem; height:32rem; }
+.panel .headerActions { margin-left:8rem; }
+.panel .headerActions .small { margin-left:0; background:transparent; border:0; }
+.panel .headerActions .small:hover:not([disabled]) { background-color:rgba(255,255,255,.07); }
+.panel img { pointer-events:none; }
+.panel button { border-color:transparent; border-radius:10rem; background-color:#2b2d35; transition:background-color 140ms ease-out,border-color 140ms ease-out,opacity 140ms ease-out; }
+.panel button:hover:not([disabled]) { background-color:#373a44; }
+.panel button:active:not([disabled]) { transform:translateY(1rem); transition:transform 90ms ease-out; }
+.panel button[disabled], .panel button[disabled]:hover, .panel input:disabled,
+.panel [role="slider"][aria-disabled="true"] { opacity:.2; filter:grayscale(1); cursor:default; }
+.panel button[disabled]:hover { background-color:#232c34!important; }
+.panel button.selected:not([disabled]) { background-color:rgba(69,147,252,.16)!important; border-color:rgba(103,169,255,.55)!important; }
+.panel .tools button.selected:not([disabled]), .panel .roadModes button.selected:not([disabled]), .panel .snaps button.selected:not([disabled]) { background-color:rgba(225,151,75,.14)!important; border-color:rgba(229,162,93,.5)!important; }
+.panel .planTabs { margin:10rem 0 14rem; padding:0; border:0; border-bottom:1rem solid #3a4655; background-color:transparent; border-radius:0; }
+.panel .planTab { border-radius:8rem 8rem 0 0!important; min-height:44rem; padding:10rem 16rem; font-size:14rem!important; background:transparent; }
+.panel .planTabActive:not([disabled]) { background-color:rgba(65,138,247,.14)!important; }
+.panel .planTabActive::after { display:block; background-color:#418af7; }
+.panel .steps { margin-bottom:16rem; }
+.panel .steps .current { color:#83b7ff; }
+.panel .steps b { border:0; background-color:#2b2e37; border-radius:6rem; }
+.panel .steps .current b { background-color:#294c7b; }
+.panel .check.selected:not([disabled]) { background-color:transparent!important; border-color:transparent!important; }
+.panel .check[aria-checked="true"] .switchTrack { background-color:#4593fc; border-color:#4593fc; }
+.panel .switchTrack { border-color:transparent; transition:background-color 160ms ease-out; }
+.panel .switchThumb { transition:left 160ms ease-out; }
+.panel .tool>span, .panel .check>span:last-child, .panel .search, .panel .disclosure,
+.panel .towerChoice, .panel .towerOption { font-size:15rem; }
+.panel .tool { min-height:44rem; border-radius:10rem; }
+.panel .toolGrid .tool { margin-bottom:8rem; }
+.panel .status { padding:12rem; background-color:#242a33; border-radius:10rem; }
+.panel .tabs { border:0; padding:0; margin-top:20rem; }
+.panel .tab { font-size:13rem!important; min-height:40rem; background-color:transparent; }
+.panel .tab.selected:not([disabled]) { border-color:transparent!important; background-color:#29394f!important; }
+.panel .sectionTitle, .panel .sectionTitle b, .panel .parameter>span,
+.panel .steps, .panel .metrics>div>span, .panel .status, .panel .empty { font-size:13rem; }
+.panel .sectionTitle { margin:16rem 0 8rem; }
+.panel .metrics { margin:20rem 0; }
+.panel .metrics>div { border:0; }
+.panel .metrics strong, .panel .metrics .quantity { font-size:20rem; }
+.panel .primaryBuild .tool:not([disabled]) { background-color:#347deb!important; border-color:transparent!important; }
+.panel .primaryBuild .tool:hover:not([disabled]) { background-color:#4593fc!important; }
+.panel .saveAction .save { background-color:#2b2d35!important; border-color:transparent!important; }
+.panel .searchRow { background-color:#24262e; border-color:transparent; border-radius:10rem; padding:2rem 12rem; }
+.panel .asset { height:124rem; border-radius:12rem; background-color:#25272f; }
+.panel .assetName { font-size:12rem; line-height:16rem; height:32rem; }
+.panel .assetSize { font-size:11rem; color:#aeb8c8; }
+.panel .badge { background-color:#347deb; border:0; }
+.panel .numericRow input { text-align:center; margin-left:8rem; font-size:15rem; border:0; border-radius:8rem; background-color:#2b2d35; }
+.panel .parameter { margin:16rem 0; }
+.panel .sliderFill { background-color:#4593fc; }
+.panel .sliderThumb { background-color:#b7d5ff; border:0; border-radius:5rem; }
+.panel .slider:focus, .panel button:focus-visible, .panel input:focus-visible { outline:2rem solid #83b7ff; outline-offset:-2rem; }
+.panel .scrollViewport { height:auto; flex:1; min-height:0; }
+.panel .inspectorScroll { height:auto; max-height:none; flex:1; min-height:0; }
+.panel.inspector { border-radius:20rem; background-color:rgba(24,25,30,.97); }
+.panel .statusError { background-color:rgba(133,35,48,.36); border:1rem solid #cf6a79; color:#ffd3d9; }
+.panel .content { animation:apContentEnter 160ms ease-out; }
+@keyframes apContentEnter { from { opacity:0; } to { opacity:1; } }
+@media (prefers-reduced-motion:reduce) {
+ .panel, .panel *, .panel *::after { animation:none!important; transition:none!important; }
+}
+
+/* Switch baseline shared with TunnelStylePacks. State lives on the button,
+   not a selected card; native disabled applies only once to the control. */
+.panel .check { display:flex; align-items:center; min-height:48rem; padding:10rem 0; }
+.panel .check .switchLabel { flex:1; min-width:0; padding-right:12rem; font-size:15rem; line-height:1.4; white-space:normal; overflow-wrap:break-word; }
+.panel .switchDisabled { opacity:.2; }
+.panel button.switchTrack { position:relative; display:block; flex:0 0 42rem; width:42rem; height:24rem; min-height:24rem; padding:0; margin:0; border:0; border-radius:12rem; background-color:#414d5c; transition:background-color 140ms ease-out,opacity 140ms ease-out; }
+.panel button.switchTrack:hover:not([disabled]) { background-color:#4e5d70; }
+.panel button.switchTrack[aria-checked="true"], .panel button.switchTrack[aria-checked="true"]:hover:not([disabled]) { background-color:#418af7; }
+.panel .switchTrack .switchThumb { position:absolute; display:block; left:3rem; top:3rem; width:18rem; height:18rem; border-radius:9rem; background-color:#fff; box-shadow:none; pointer-events:none; transition:left 160ms ease-out; }
+.panel .switchTrack[aria-checked="true"] .switchThumb { left:21rem; }
+.panel button.switchTrack[disabled], .panel button.switchTrack[disabled]:hover { background-color:#414d5c!important; opacity:.2; filter:grayscale(1); }
+.panel .switchTrack:focus-visible { outline:2rem solid #85b4ff; outline-offset:2rem; }
+.panel .switchRow>.check, .panel .assetFilters>.check, .panel .treeAges>.check { width:100%; }
+@media (prefers-reduced-motion:reduce) { .panel button.switchTrack, .panel .switchThumb { transition:none!important; } }
+.panel .assetFilters { flex-wrap:wrap; }.panel .assetFilters .check { flex:0 0 100%; width:100%; margin-right:0; }
+
+/* Numeric rows keep the same value/unit columns even for unitless values. */
+.panel .numericRow { min-height:44rem; }
+.panel .numericRow input, .panel .edit .numericRow input { flex:0 0 80rem; width:80rem; min-width:0; height:36rem; margin:0; padding:6rem; text-align:center; }
+.panel .numericRow .numericUnit { display:flex; align-items:center; justify-content:flex-start; flex:0 0 32rem; width:32rem; min-width:32rem; margin:0 0 0 8rem; font-size:13rem; font-weight:normal; }
+.panel .numericUnit .glyph { width:18rem; height:18rem; }
+.panel .slider { flex:1 1 0; min-width:0; height:28rem; margin:0 22rem 0 10rem; }
+.panel .slider::before { top:11rem; height:6rem; border-radius:3rem; background-color:#435168; }
+.panel .sliderFill { top:11rem; height:6rem; border-radius:3rem; background-color:#418af7; transition:left 100ms ease-out,width 100ms ease-out; }
+.panel .sliderThumb { top:4rem; width:20rem; height:20rem; margin-left:-10rem; border-radius:10rem; background-color:#e6efff; border:3rem solid #418af7; pointer-events:none; transition:left 100ms ease-out,box-shadow 140ms ease-out; }
+.panel .slider:hover:not([aria-disabled="true"]) .sliderThumb, .panel .slider:focus .sliderThumb { box-shadow:0 0 0 4rem rgba(65,138,247,.22); }
+.panel .sliderDragging .sliderThumb, .panel .sliderDragging .sliderFill { transition:none; }
+@media (prefers-reduced-motion:reduce) { .panel .sliderThumb, .panel .sliderFill { transition:none!important; } }

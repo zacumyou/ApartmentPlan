@@ -1,4 +1,4 @@
-﻿const fs=require('fs'),path=require('path');const root=__dirname;const en={},ko={};function add(k,e,v){en[k]=e;ko[k]=v}
+const fs=require('fs'),path=require('path');const root=__dirname;const en={},ko={};function add(k,e,v){en[k]=e;ko[k]=v}
 add('AP.Option.GenerateSurfaceParking','Generate surface parking (slab apartments)','지상 주차장 생성 (판상형 아파트)');
 add('AP.Desc.GenerateSurfaceParking','Turn off to omit generated parking bays. Building access roads and paths remain. Parking built into selected assets is unchanged.','끄면 계획도의 주차면을 생성하지 않습니다. 건물 진입 도로와 보행로는 유지되며, 선택한 에셋 자체에 포함된 주차장은 바뀌지 않습니다.');
 add('AP.ReflowNoSpace','No safe space and connected access road could be found around this building.','주변 유휴부지에서 건물과 연결 도로가 함께 들어갈 자리를 찾지 못했습니다.');
@@ -45,6 +45,7 @@ add("AP.ForceDemolishMessage","Delete the recorded objects of this compound desp
 add("AP.ComingSoon","Coming soon","준비 중");
 add("AP.Tower.Tab","Tower APT","탑상형 APT");
 add("AP.Tower.SelectParking","Choose a parking asset for every entrance.","모든 출입구에 배치할 주차장 에셋을 선택하세요.");
+add("AP.Tower.ParkingSearchDefault","parking","주차장");
 add("AP.Tower.ParkingSearch","Parking asset search","주차장 에셋 검색");
 add("AP.Tower.Parking","Entrance parking asset","출입구 지하주차장 에셋");
 add("AP.Tower.Choose","Choose an asset","선택하세요");

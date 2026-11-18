@@ -1,3 +1,15 @@
+# 0.1.138
+
+## 한국어
+- 단지 유형 탭에서 현재 선택한 유형에 파란 밑줄을 표시합니다. 옵션 스위치는 켜면 파란색, 끄면 회색으로 표시해 상태를 쉽게 확인할 수 있습니다.
+- 배치 설정의 슬라이더와 숫자 입력칸을 가지런히 맞춰 여러 값을 비교하고 조절하기 쉬워졌습니다.
+- 탑상형 주차장 검색어가 게임 언어에 맞게 표시됩니다. 설정해 둔 주차장 에셋이 설치되어 있지 않으면 다른 에셋을 선택할 수 있도록 선택 버튼을 표시합니다.
+
+## English
+- A blue underline marks the selected compound type. Option switches are blue when on and gray when off.
+- Sliders and number fields now line up across layout settings, making values easier to compare and adjust.
+- Tower parking search now starts with a term in your game language. If your saved parking asset is missing, the picker prompts you to choose another.
+
 # 0.1.133
 
 ## 한국어
