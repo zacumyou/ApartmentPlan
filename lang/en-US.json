@@ -90,6 +90,8 @@
   "AP.Villa.NoConnection": "An approved road connection cannot be reached. Review the perimeter connections or site shape.",
   "AP.LimitParcels": "Plan shape limit: requested {current}, maximum {maximum}. Reduce the site size.",
   "AP.LimitParcelsTrimmed": "Plan shape limit: generated {current}, maximum {maximum}. Some grass shapes were omitted.",
+  "AP.CleanupOffer": "Many shapes are saved. Review unused plans",
+  "AP.LimitSinglePlanShapes": "This plan alone contains {current} shapes. Reduce its size or split it into smaller plans (maximum {maximum} each).",
   "AP.LimitTotalShapes": "Total saved shape limit: {current} including this plan / maximum {maximum}. Remove unused saved plans.",
   "AP.LimitSavedPlans": "Saved plan limit: {current} including this plan / maximum {maximum}. No unbuilt plans are available for automatic cleanup.",
   "AP.LimitZones": "Manual zone limit: {current} including this zone / maximum {maximum}.",

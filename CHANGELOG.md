@@ -1,3 +1,13 @@
+# 0.1.139
+
+## 한국어
+- 여러 계획에 저장된 도형이 합쳐서 48,000개를 넘어도, 작업 중인 계획을 저장하고 건설 미리보기로 넘어갈 수 있습니다. 계획 하나가 48,000개를 넘으면 구역을 나누도록 안내합니다.
+- 저장 공간을 정리하고 싶다면 저장 버튼 위의 ‘미사용 계획 정리’를 누르세요. 정리할 수 있는 미건설 계획을 큰 것부터 보여줍니다. 현재 초안을 유지한 채 지울 계획을 직접 고르고 확인할 수 있습니다.
+
+## English
+- You can now save your plan and open the construction preview even when your plans contain more than 48,000 shapes in total. If a single plan exceeds that limit, the mod suggests splitting it into smaller areas.
+- To free up space, select “Review unused plans” above Save. Eligible unbuilt plans appear largest first. Choose and confirm which plan to remove while keeping your current draft open.
+
 # 0.1.138
 
 ## 한국어

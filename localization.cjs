@@ -94,6 +94,8 @@ add("AP.Villa.Enabled","Connect","연결");
 add("AP.Villa.NoConnection","An approved road connection cannot be reached. Review the perimeter connections or site shape.","허용한 외부 도로 연결에 도달하지 못했습니다. 테두리 연결점이나 구역 형태를 확인하세요.");
 add("AP.LimitParcels","Plan shape limit: requested {current}, maximum {maximum}. Reduce the site size.","단일 계획 표시 한도: 생성 {current}개 / 최대 {maximum}개. 구역 크기를 줄이세요.");
 add("AP.LimitParcelsTrimmed","Plan shape limit: generated {current}, maximum {maximum}. Some grass shapes were omitted.","단일 계획 표시 한도: 생성 {current}개 / 최대 {maximum}개. 일부 잔디 표시를 생략했습니다.");
+add("AP.CleanupOffer","Many shapes are saved. Review unused plans","저장된 도형이 많습니다 · 미사용 계획 정리");
+add("AP.LimitSinglePlanShapes","This plan alone contains {current} shapes. Reduce its size or split it into smaller plans (maximum {maximum} each).","이 계획 하나에 도형이 {current}개 있습니다. 구역을 줄이거나 계획을 나누세요(계획당 최대 {maximum}개).");
 add("AP.LimitTotalShapes","Total saved shape limit: {current} including this plan / maximum {maximum}. Remove unused saved plans.","전체 저장 표시 한도: 이번 계획 포함 {current}개 / 최대 {maximum}개. 불필요한 저장 계획을 삭제하세요.");
 add("AP.LimitSavedPlans","Saved plan limit: {current} including this plan / maximum {maximum}. No unbuilt plans are available for automatic cleanup.","저장 계획 한도: 이번 계획 포함 {current}개 / 최대 {maximum}개. 자동 정리할 미건설 계획이 없습니다.");
 add("AP.LimitZones","Manual zone limit: {current} including this zone / maximum {maximum}.","수동 구역 개수 한도: 이번 구역 포함 {current}개 / 최대 {maximum}개.");

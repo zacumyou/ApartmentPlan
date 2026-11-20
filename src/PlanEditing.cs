@@ -91,11 +91,11 @@ public partial class PlanSystem {
   if(missingFronts>0){Status="AP.FrontageRecalculate";return;}
   if(!Draft.Villa&&Entrances.Count==0){Status="AP.PickEntrance";return;}
   if(Draft.RequiredAccessFailures>0){Status="AP.AccessIncomplete";return;}
-  CatalogTrees();Save(true);if(EditingPlan<0)return;if(CompoundEditing){BeginCompoundReplacement();return;}
+  CatalogTrees();if(!Save(true)||EditingPlan<0)return;if(CompoundEditing){BeginCompoundReplacement();return;}
   Mode="preview";Status="AP.NativeChecking";World.GetOrCreateSystemManaged<Game.Tools.ToolSystem>().activeTool=World.GetOrCreateSystemManaged<ConstructionTool>();
  }
  internal static List<Point> StoredBoundary(StoredPlan p)=>p.Shapes.Where(s=>s.Kind==7&&Math.Abs(s.Width-.5f)<.001f).Select(s=>new Point(s.A.x,s.A.z)).ToList();
- internal object StoredSummary(StoredPlan p)=>p==null?null:new{name=p.Edit?.Name,canDelete=CanDeleteTarget(p.Info.Number),deleteReason=DeletionReason(p.Info.Number),parked=p.Info.Number==occupancyPlan?ParkedCount:null,occupiedHomes=p.Info.Number==occupancyPlan?OccupiedHomes:null,parkingCapacity=p.Info.Number==occupancyPlan?LiveParkingCapacity:null,homeCapacity=p.Info.Number==occupancyPlan?LiveHomeCapacity:null,owned=OwnedObjects(p).Count,id=p.Info.Number,area=p.Info.Area,far=p.Info.Far,homes=p.Info.Homes,built=WasConstructed(p.Entity)||p.Edit?.NativeCommitted==true,buildings=p.Edit?.AppliedPlans!=null?p.Edit.AppliedPlans.Sum(plan=>plan.Parcels.Count(r=>r.Kind==0)):p.Shapes.Count(s=>s.Kind==0),parking=p.Edit?.AppliedPlans!=null?p.Edit.AppliedPlans.Sum(plan=>plan.Parcels.Sum(r=>r.ParkingSpaces)):p.Edit?.Draft?.Parcels.Sum(r=>r.ParkingSpaces),editable=Layout.Valid(StoredBoundary(p)),legacy=p.Edit==null};
+ internal object StoredSummary(StoredPlan p)=>p==null?null:new{name=p.Edit?.Name,cleanupShapes=p.Info.Number!=EditingPlan&&!IsBuilt(p)&&p.Edit?.Pending==null&&!HasOwnedObjects(p)?p.Shapes.Count:0,canDelete=CanDeleteTarget(p.Info.Number),deleteReason=DeletionReason(p.Info.Number),parked=p.Info.Number==occupancyPlan?ParkedCount:null,occupiedHomes=p.Info.Number==occupancyPlan?OccupiedHomes:null,parkingCapacity=p.Info.Number==occupancyPlan?LiveParkingCapacity:null,homeCapacity=p.Info.Number==occupancyPlan?LiveHomeCapacity:null,owned=OwnedObjects(p).Count,id=p.Info.Number,area=p.Info.Area,far=p.Info.Far,homes=p.Info.Homes,built=WasConstructed(p.Entity)||p.Edit?.NativeCommitted==true,buildings=p.Edit?.AppliedPlans!=null?p.Edit.AppliedPlans.Sum(plan=>plan.Parcels.Count(r=>r.Kind==0)):p.Shapes.Count(s=>s.Kind==0),parking=p.Edit?.AppliedPlans!=null?p.Edit.AppliedPlans.Sum(plan=>plan.Parcels.Sum(r=>r.ParkingSpaces)):p.Edit?.Draft?.Parcels.Sum(r=>r.ParkingSpaces),editable=Layout.Valid(StoredBoundary(p)),legacy=p.Edit==null};
 }
 }
 

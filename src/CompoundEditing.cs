@@ -14,8 +14,8 @@ public partial class PlanSystem {
  bool BeginCompoundReplacement(){
   var stored=Saved.Find(p=>p.Info.Number==EditingPlan);
   if(stored==null||!EntityManager.HasBuffer<PlanOwnedEntity>(stored.Entity)){Status="AP.NoOwnership";return false;}
-  int shapes=Saved.Where(p=>p.Info.Number!=EditingPlan).Sum(p=>p.Shapes.Count)+Preview.Count+Boundary.Count;
-  if(shapes>PlanLimits.TotalShapes){SetLimit("AP.LimitTotalShapes",shapes,PlanLimits.TotalShapes);return false;}
+  int shapes=Preview.Count+Boundary.Count;
+  if(shapes>PlanLimits.TotalShapes){SetLimit("AP.LimitSinglePlanShapes",shapes,PlanLimits.TotalShapes);return false;}
   if(!SaveCompoundPending(false)||stored.Edit?.Pending==null)return false;
   replacementPlan=EditingPlan;
   // Resume a saved pending edit if deletion finished before the metadata checkpoint.
