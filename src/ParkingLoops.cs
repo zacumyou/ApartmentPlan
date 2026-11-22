@@ -44,7 +44,7 @@ internal sealed partial class ResidentialLayout {
       var r=RectBetween(Math.Min(at,end)-width/2,Math.Max(at,end)+width/2,axis.Across-width/2,axis.Across+width/2);
       if(!Space(r)){fits=false;break;}extensions.Add(Tuple.Create(r,P(end,axis.Across),P(at,axis.Across)));
      }
-     if(!fits)continue;
+     if(!fits||ParallelStreetConflict(P(at,a.Across),P(at,b.Across),width)||extensions.Any(e=>ParallelStreetConflict(e.Item2,e.Item3,width)))continue;
      // Already closed: do not add duplicate native courses in the same place.
      if(KindRectangle(cap,1))break;
      foreach(var e in extensions){Paint(e.Item1,1);plan.ConstructionRoutes.Add(new PlanRoute{Use="aisle",Width=width,Points=new List<Point>{e.Item2,e.Item3}});}

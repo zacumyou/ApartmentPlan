@@ -119,7 +119,11 @@ public partial class PlanSystem {
   }
   if(OwnedObjects(stored).Count>0){Status="AP.DemolitionIncomplete";CancelCompoundReplacement();Revision++;return;}
   if(FinishCompoundReplacement(stored))return;
-  EntityManager.DestroyEntity(stored.Entity);Saved.Remove(stored);if(EditingPlan==id){EditingPlan=-1;Draft=null;Preview.Clear();Boundary.Clear();Entrances.Clear();Entrance=null;}SelectedPlan=-1;NativeCommitted=false;Status="AP.DemolitionApplied";Revision++;
+  bool reportHere=EditingPlan==id||EditingPlan<0&&Boundary.Count==0;
+  EntityManager.DestroyEntity(stored.Entity);Saved.Remove(stored);ForgetDemolishedPlan(id);
+  var tools=World.GetOrCreateSystemManaged<ToolSystem>();
+  if(tools.activeTool is ConstructionTool active&&active.DemolitionPlan==id){if(Open)Activate();else Exit();}
+  if(reportHere)Status="AP.DemolitionApplied";Revision++;
   Trace.Event("plan.demolition.complete","id="+id);
  }
 }
@@ -212,7 +216,7 @@ public partial class ConstructionTool {
   }
   int missing=demolitionTargets.Count(e=>Live(e)&&!EntityManager.HasComponent<Game.Net.Node>(e)&&!covered.Contains(e));
   m_ErrorQuery.CompleteDependency();Metrics.Clear();Metrics["DeleteObjects"]=deleted;Metrics["ForeignObjects"]=foreign;Metrics["MissingObjects"]=missing;Metrics["Errors"]=errors;
-  Notice=foreign>0?"AP.DemolitionForeign":"AP.DemolishHint";detail="delete="+deleted+" foreign="+foreign+" missing="+missing+" errors="+errors;
+  Notice=foreign>0?"AP.DemolitionForeign":"";detail="delete="+deleted+" foreign="+foreign+" missing="+missing+" errors="+errors;
   if(foreign>0)detail+=" foreignKinds[edge,node,building,tree,area,other,missing]="+string.Join(",",new[]{foreignKinds[1],foreignKinds[2],foreignKinds[3],foreignKinds[4],foreignKinds[5],foreignKinds[6],foreignKinds[0]});
   return deleted>0&&foreign==0&&missing==0&&errors==0&&m_ErrorQuery.IsEmptyIgnoreFilter;
  }
@@ -256,6 +260,3 @@ public partial class ConstructionTool {
  }
 }
 }
-
-
-

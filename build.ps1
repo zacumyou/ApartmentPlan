@@ -9,6 +9,10 @@ try {
  if($LASTEXITCODE -ne 0){throw 'Release logging guard failed'}
  dotnet run --project tests/Logging/Logging.csproj -c Release
  if($LASTEXITCODE -ne 0){throw 'Logging policy tests failed'}
+ dotnet run --project tests/LayoutTests.csproj -c Release -- --boundary-transitions
+ if($LASTEXITCODE -ne 0){throw 'Boundary transition tests failed'}
+ dotnet run --project tests/LayoutTests.csproj -c Release -- --workflow
+ if($LASTEXITCODE -ne 0){throw 'Planning workflow regression tests failed'}
  node localization.cjs
  if($LASTEXITCODE -ne 0){throw 'Localization generation failed'}
  node tests/ui-compatibility.test.cjs
@@ -26,6 +30,16 @@ try {
  Copy-Item README.md,TRANSLATING.md,NOTICE.md package -Force
  $suffix=if($localTimingEnabled){"-local-diagnostics"}else{""}
  if($localTimingEnabled){Set-Content package/LOCAL-DIAGNOSTICS-DO-NOT-PUBLISH.txt "Local stage timing enabled. Rebuild with -PublicRelease before public release."}elseif(Test-Path package/LOCAL-DIAGNOSTICS-DO-NOT-PUBLISH.txt){Remove-Item -LiteralPath package/LOCAL-DIAGNOSTICS-DO-NOT-PUBLISH.txt}
- Compress-Archive -Path package/* -DestinationPath "ApartmentPlan-0.1.139$suffix.zip" -Force
- Write-Output 'ApartmentPlan 0.1.139 built and packaged. Game runtime not verified.'
+ Compress-Archive -Path package/* -DestinationPath "ApartmentPlan-0.1.166$suffix.zip" -Force
+ Write-Output 'ApartmentPlan 0.1.166 built and packaged. Game runtime not verified.'
 } finally {Pop-Location}
+
+
+
+
+
+
+
+
+
+

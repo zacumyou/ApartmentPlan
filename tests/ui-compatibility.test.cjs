@@ -25,3 +25,15 @@ assert(context.exports.assetMatches({Id:'Road10',Name:'아파트 A'},'아파트'
 assert(context.exports.assetMatches({Id:'Road10',Name:'아파트 A'},'ROAD'));
 assert.equal(context.exports.assetName({Id:'x',Name:'Fallback'},()=>null),'Fallback');
 console.log(`PASS ${keys.size} UI/backend translation keys in both languages; clock fallbacks and asset search without Intl`);
+const panelSource=fs.readFileSync(path.join(root,'ui/src/index.tsx'),'utf8');
+const jsx=ts.createSourceFile('index.tsx',panelSource,ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);
+const diagram=jsx.statements.find(n=>ts.isFunctionDeclaration(n)&&n.name?.text==='DimensionDiagram');
+let captionCount=0;
+function checkCaption(n){
+ if(ts.isJsxElement(n)&&n.openingElement.tagName.getText(jsx)==='span'){
+  captionCount++;
+  assert(n.children.length===1&&ts.isJsxExpression(n.children[0]),'Diagram caption must have one React text child');
+ }
+ ts.forEachChild(n,checkCaption);
+}
+checkCaption(diagram);assert(captionCount>0,'Missing diagram caption');

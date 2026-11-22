@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 namespace ApartmentPlan {
@@ -143,7 +143,7 @@ public static class VillaLayout {
     Add(firstHit,lastHit,aisle,"aisle");
    }
   }
-  var internalSegments=routes.SelectMany(r=>r.Points.Skip(1).Select((b,i)=>new{A=r.Points[i],B=b,Width=r.Width})).ToArray();
+  var internalSegments=routes.SelectMany(r=>r.Points.Skip(1).Select((b,i)=>new ConstructionEdge{A=r.Points[i],B=b,Width=r.Width})).ToList();
   foreach(var gate in gates){
    if(arterialGates.Contains(gate))continue;
    // Extra entrances near a corner add a short redundant bend. Arterial
@@ -164,9 +164,12 @@ public static class VillaLayout {
      if((c.Point-elbow).Length<8)elbow=c.Point+n*(SiteFrame.Dot(inside-c.Point,n)<0?-12:12);
      var path=new List<Point>{road,inside,elbow,c.Point};
      if((inside-elbow).Length<2)path.RemoveAt(2);
+     if(path.Count==4&&ConstructionGraph.ParallelRibbons(road,inside,aisle,elbow,c.Point,aisle))
+      path.RemoveAt(2); // The overshooting elbow would fold back alongside the entrance.
+     if(!VillaRoadRules.TrimEntrance(path,internalSegments))continue;
      bool ok=true;for(int k=2;k<path.Count;k++)if(!Corridor(path[k-1],path[k],aisle)){ok=false;break;}
      if(!ok)continue;
-     for(int k=1;k<path.Count;k++)Add(path[k-1],path[k],aisle,"aisle");roots.Add(c.Point);p.VillaRoots.Add(gate.Road);rootDirections.Add(worldDirection);joined=true;break;
+     for(int k=1;k<path.Count;k++){Add(path[k-1],path[k],aisle,"aisle");if((path[k]-path[k-1]).Length>=2)internalSegments.Add(new ConstructionEdge{A=path[k-1],B=path[k],Width=aisle});}roots.Add(path.Last());p.VillaRoots.Add(gate.Road);rootDirections.Add(worldDirection);joined=true;break;
     }
     if(joined)break;
    }

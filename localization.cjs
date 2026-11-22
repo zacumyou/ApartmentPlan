@@ -1,4 +1,5 @@
 const fs=require('fs'),path=require('path');const root=__dirname;const en={},ko={};function add(k,e,v){en[k]=e;ko[k]=v}
+add('AP.MoreRules','Detailed settings','세부 조절');
 add('AP.Option.GenerateSurfaceParking','Generate surface parking (slab apartments)','지상 주차장 생성 (판상형 아파트)');
 add('AP.Desc.GenerateSurfaceParking','Turn off to omit generated parking bays. Building access roads and paths remain. Parking built into selected assets is unchanged.','끄면 계획도의 주차면을 생성하지 않습니다. 건물 진입 도로와 보행로는 유지되며, 선택한 에셋 자체에 포함된 주차장은 바뀌지 않습니다.');
 add('AP.ReflowNoSpace','No safe space and connected access road could be found around this building.','주변 유휴부지에서 건물과 연결 도로가 함께 들어갈 자리를 찾지 못했습니다.');
@@ -244,7 +245,7 @@ add("AP.UI.Cancel","Cancel deletion","삭제 취소");
 add("AP.Keys","Enter finishes the polygon. Shift R lengthens and Shift T shortens by 2 m. Right click undoes. Rebind in Options.","Enter는 구역 완료, Shift R은 2m 늘리기, Shift T는 2m 줄이기, 우클릭은 취소입니다. 옵션에서 단축키를 바꿀 수 있습니다.");
 add("AP.undo","Undo last point or entrance","최근 입력 취소");
 add("AP.Footprint","Footprint in square metres","건축면적 제곱미터");
-add("AP.Shortfall","Some targets are unmet. See Summary.","목표 일부가 부족합니다. 면적 현황을 확인하세요.");
+add("AP.Shortfall","Some targets are unmet.","목표 일부가 부족합니다.");
 add("AP.ReplacementFar","Replacement exceeds the enabled FAR limit.","교체하면 설정한 용적률 상한을 넘습니다.");
 add("AP.Option.MainRoadCornerMode","Main-road corners","메인 도로 모서리");
 add("AP.Desc.MainRoadCornerMode","0: prefer curves, allow right angles when curves cannot fit. 1: curves only. 2: right angles. All modes keep full road width inside the boundary and outside exclusions.","0: 곡선 우선, 불가능하면 직각 / 1: 곡선만 / 2: 직각. 모든 방식에서 도로 폭과 경계, 제외 범위를 지킵니다.");
@@ -500,7 +501,32 @@ add('AP.Option.DebugLogging','Detailed debug logging','상세 디버그 로그')
 add('AP.Desc.DebugLogging','Record detailed local events for troubleshooting. Off on every game start. Does not enable automatic uploads.','문제 분석용 상세 이벤트를 로컬에 기록합니다. 게임 시작마다 꺼집니다. 자동 전송은 활성화되지 않습니다.');
 add('AP.RoadFinishAtEnd','Click to finish adding roads.','클릭하면 도로 추가를 완료합니다.');
 add('AP.ExistingEntrance','Existing entrance. Right-click nearby to remove it.','기존 입구입니다. 가까이에서 우클릭하면 이 입구를 삭제합니다.');
+add('AP.UndoPoint','Undo last point','마지막 꼭짓점 취소');
+add('AP.RedoPoint','Restore point','꼭짓점 복원');
+add('AP.UndoEntrance','Undo last entrance','마지막 입구 취소');
+add('AP.RedoEntrance','Restore entrance','입구 복원');
+add('AP.BackBoundary','Return to boundary editing','구역 편집으로 돌아가기');
+add('AP.BackEntrance','Return to entrances','입구 지정으로 돌아가기');
+add('AP.Manage','Manage plan','계획도 관리');
+add('AP.ZoneStage','Zone editing','구역 편집');
+add('AP.BoundaryStage','Define boundary','구역 지정');
+add('AP.EntranceStage','Place entrances','입구 지정');
+add('AP.PreviewStage','Plan preview','계획도 미리보기');
+add('AP.nativeApply','Confirm construction','건설 확정');
+add('AP.finishEntrances','Preview layout','배치 미리보기');
+add('AP.DiagramDefault','Default','기본');
+add('AP.DiagramExample','Example','예시');
+add('AP.DiagramReference','Reference','기준');
+add('AP.DiagramCompare','Compare','비교');
 for(const data of [en,ko])for(const key of Object.keys(data))data[key]=data[key].replace(/²/g,"2").replace(/[·•]/g,",").replace(/×/g,"x").replace(/−/g,"-").replace(/±/g,"+/-").replace(/–/g,"-");
+add('AP.Flow.Parking','Choose entrance parking','출입구 주차장 선택');
+add('AP.Flow.Assets','Choose buildings','건물 에셋 선택');
+add('AP.Flow.AddEntrance','Click the boundary to add an entrance.','경계선을 클릭해 입구를 추가하세요.');
+add('AP.Flow.Gates','Review entrances','입구 확인');
+add('AP.Flow.Selected','{n} selected','{n}개 선택');
+add('AP.finishEntrances','Review layout','배치 확인');
+add('AP.nativePreview','Review before building','건설 전 확인');
+add('AP.Option.MainParkingSetback','Road to buildings and parking (m)','도로와 건물·주차면 사이 거리 (m)');
 for(const [name,data]of [['en-US',en],['ko-KR',ko]])fs.writeFileSync(path.join(root,'lang',name+'.json'),JSON.stringify(data,null,2));
 
 

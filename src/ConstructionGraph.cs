@@ -6,6 +6,16 @@ namespace ApartmentPlan {
 // so T-junctions use exactly equal endpoint positions rather than visual contact.
 public sealed class ConstructionEdge {public Point A,B;public string Use;public double Width;}
 public static class ConstructionGraph {
+ internal static bool ParallelRibbons(Point a,Point b,double width,Point c,Point d,double otherWidth){
+  var span=b-a;double length=span.Length;
+  if(length<.1||(d-c).Length<.1)return false;
+  var unit=span*(1/length);
+  if(Math.Abs(Layout.Cross(unit,d-c))>.05)return false;
+  double offset=Math.Abs(Layout.Cross(unit,c-a));
+  if(offset<.02||offset>=(width+otherWidth)/2-.05)return false;
+  double u=SiteFrame.Dot(c-a,unit),v=SiteFrame.Dot(d-a,unit);
+  return Math.Min(length,Math.Max(u,v))-Math.Max(0,Math.Min(u,v))>.5;
+ }
  public static List<ConstructionEdge> Create(Plan plan,bool preserveCurves=true){
   var raw=new List<ConstructionEdge>();
   foreach(var route in plan.ConstructionRoutes.Concat(plan.Routes)){
@@ -30,6 +40,7 @@ public static class ConstructionGraph {
     if(e.Use=="pedestrian"&&!ClearPath(plan,p,q,e.Width))continue;
     target=other;join=q;best=distance;
    }
+   if(target!=null&&best>.000001&&e.Use!="pedestrian"&&raw.Concat(extensions).Any(r=>r.Use!="pedestrian"&&ParallelRibbons(p,join,e.Width,r.A,r.B,r.Width)))continue;
    if(target!=null&&best>.000001)extensions.Add(new ConstructionEdge{A=p,B=join,Use=e.Use,Width=e.Width});
   }
   raw.AddRange(extensions);
@@ -110,6 +121,7 @@ public static class ConstructionGraph {
     if(component[i]==component[j]||preserveHeading&&incident[Key(p)].Count!=1)continue;var e=roads[j];var d=e.B-e.A;double length2=SiteFrame.Dot(d,d);if(length2<1e-8)continue;
     Point q;if(preserveHeading){if(!ForwardJoin(roads[i],p,e,e.Width/2+.03,out q))continue;}else{double t=SiteFrame.Dot(p-e.A,d)/length2;if(t<0||t>1)continue;q=e.A+d*t;}double gap=(q-p).Length;
     if(gap<=.000001||gap>e.Width/2+.03||gap>=best)continue;
+    if(roads.Any(r=>ParallelRibbons(p,q,roads[i].Width,r.A,r.B,r.Width)))continue;
     source=roads[i];target=e;from=p;to=q;best=gap;
    }
    if(target==null)return;

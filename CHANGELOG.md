@@ -1,3 +1,21 @@
+# 0.1.166
+
+## 한국어
+
+- 판상형·탑상형·빌라 모두 구역 지정 → 입구 지정 → 배치 미리보기 순서로 진행합니다. 마지막 입력을 취소하거나 다시 적용할 수 있고, 다음 단계에 필요한 건물이나 입구가 빠졌다면 그 자리에서 보완할 수 있습니다.
+- 기본 패널을 줄여 지도를 더 넓게 볼 수 있습니다. ‘넓게 보기’에서는 왼쪽에서 배치 조건을 조절하면서 오른쪽에서 건물 에셋을 찾고 선택할 수 있습니다.
+- 동간 간격과 도로 이격 거리 등 주요 설정을 바로 조절할 수 있습니다. 세부 조절의 슬라이더에 마우스를 올리면 기본값과 변경 예시를 그림으로 비교할 수 있습니다.
+- 단지를 삭제한 뒤 이전 단지의 입구 지정 단계나 경고가 남는 문제를 수정했습니다.
+- 빌라 진입로가 첫 교차로를 지나 되꺾이면서 단지 안 도로와 겹치는 경우를 줄였습니다.
+
+## English
+
+- Slab, tower and villa plans now follow the same steps: draw the boundary, place entrances, then preview the layout. You can undo or redo your last input. If an entrance or building selection is missing, you can add it from the current step.
+- The compact panel leaves more of the map visible. In wide view, you can adjust the layout on the left while browsing and selecting buildings on the right.
+- Common settings such as building spacing and road setbacks are within reach. Hover over a slider in the detailed settings to see how changing its value affects the layout.
+- Fixed the panel returning to entrance placement or showing an old warning after a compound was deleted.
+- Villa entrance roads are less likely to double back and overlap an internal street after reaching their first junction.
+
 # 0.1.139
 
 ## 한국어

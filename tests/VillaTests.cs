@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.IO;
 using System.Linq;
 using System.Collections.Generic;
@@ -78,6 +78,19 @@ static class VillaTests {
   var folder=Directory.Exists("docs")?"docs":"ApartmentPlan/docs";
   File.WriteAllText(folder+"/villa-user-sketch.json",JsonConvert.SerializeObject(new{plan,gates,options,missing,details,courses,emptyBlocks=VillaRoadRules.EmptyBlocks(plan,ConstructionGraph.Create(plan))}));
   Console.WriteLine("buildings="+plan.Parcels.Count(p=>p.Kind==0)+" area="+plan.Area+" missingFrontage="+missing+" accessFailures="+plan.RequiredAccessFailures+" "+plan.Diagnostics);
+ }
+ public static void EntranceJunction(){
+  var street=new ConstructionEdge{A=new Point(-20,10),B=new Point(20,10),Width=8,Use="aisle"};
+  var path=new List<Point>{new Point(0,-10),new Point(0,16),new Point(1,22),new Point(1,10)};
+  if(!VillaRoadRules.TrimEntrance(path,new[]{street})||path.Count!=2||(path.Last()-new Point(0,10)).Length>.001)throw new Exception("Entrance overshot first crossing");
+  var plan=new Plan{Villa=true,Right=new Point(1,0),Forward=new Point(0,1)};
+  plan.Routes.Add(new PlanRoute{Use="aisle",Width=8,Points=new List<Point>{street.A,street.B}});
+  plan.Routes.Add(new PlanRoute{Use="aisle",Width=8,Points=path});
+  var edges=ConstructionGraph.Create(plan);
+  if(edges.Count!=3||edges.Count(e=>(e.A-path.Last()).Length<.001||(e.B-path.Last()).Length<.001)!=3)throw new Exception("Expected shared T node");
+  var fold=new List<Point>{new Point(0,0),new Point(0,20),new Point(1,2)};
+  if(VillaRoadRules.TrimEntrance(fold,Array.Empty<ConstructionEdge>()))throw new Exception("Accepted overlapping hairpin");
+  Console.WriteLine(JsonConvert.SerializeObject(edges));
  }
  public static void Run(){
   var boundary=new[]{new Point(0,0),new Point(220,0),new Point(220,280),new Point(0,280)};

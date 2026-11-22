@@ -104,6 +104,18 @@ internal sealed partial class ResidentialLayout {
   return block;
  }
  bool RoadCell(int x,int y)=>x>=0&&y>=0&&x<nx&&y<ny&&map[x,y]==1;
+ bool AccessFits(Block block,List<Point> path,double width){
+  if(path==null)return false;
+  var axes=block.Pieces.Where(p=>p.Kind==1).Select(p=>StreetAxis(block,p)).ToArray();
+  var corners=SimplifyRoute(path);
+  for(int i=1;i<corners.Count;i++){
+   var a=corners[i-1];var b=corners[i];
+   if(ParallelStreetConflict(a,b,width))return false;
+   foreach(var axis in axes)for(int j=1;j<axis.Points.Count;j++)
+    if(ConstructionGraph.ParallelRibbons(a,b,width,axis.Points[j-1],axis.Points[j],axis.Width))return false;
+  }
+  return true;
+ }
  bool Route(Block block){
   using(var timingScope=LayoutFunctionTiming.Start(o.FunctionTiming,"Route")){
   Bounds(block.Bounds,out int a,out int b,out int c,out int d);
@@ -111,7 +123,7 @@ internal sealed partial class ResidentialLayout {
    if(supplementalRoutes++>=256)return false;
    Func<int,int,bool> join=(x,y)=>map[x,y]==1&&(x<a||y<b||x>=c||y>=d);
    var access=FindRoute(block.Gate,join,o.SupplementalAccessWidth,false,block.MaxConnection);
-   if(access==null||access.Count*cell>block.MaxConnection)return false;
+   if(!AccessFits(block,access,o.SupplementalAccessWidth)||access.Count*cell>block.MaxConnection)return false;
    DrawRoute(access,o.SupplementalAccessWidth,"aisleWide");return true;
   }
   double width=o.AccessRoad>0?o.AccessRoad:o.ContinuousFrontage?o.ParkingAisle:o.Road;
@@ -119,15 +131,38 @@ internal sealed partial class ResidentialLayout {
   // Reserve the wider approach before subsequent courts/parking occupy it.
   if(o.WideParkingAisle>width){
    var wide=FindRoute(block.Gate,target,o.WideParkingAisle,false,block.MaxConnection);
-   if(wide!=null&&wide.Count*cell<=block.MaxConnection){DrawRoute(wide,o.WideParkingAisle,"aisleWide");return true;}
+   if(AccessFits(block,wide,o.WideParkingAisle)&&wide.Count*cell<=block.MaxConnection){DrawRoute(wide,o.WideParkingAisle,"aisleWide");return true;}
   }
   var path=FindRoute(block.Gate,target,width,false,block.MaxConnection);
-  if(path==null||path.Count*cell>block.MaxConnection)return false;
+  if(!AccessFits(block,path,width)||path.Count*cell>block.MaxConnection)return false;
   DrawRoute(path,width,"access");return true;
  
   }
  }
 
+ static PlanRoute StreetAxis(Block block,Parcel street){
+  if(block.StreetAxes.TryGetValue(street,out var axis))return axis;
+  bool horizontal=street.W>=street.D;
+  var start=new Point(horizontal?street.X:street.X+street.W/2,horizontal?street.Y+street.D/2:street.Y);
+  var end=new Point(horizontal?street.X+street.W:street.X+street.W/2,horizontal?street.Y+street.D/2:street.Y+street.D);
+  return new PlanRoute{Use="aisle",Width=horizontal?street.D:street.W,Points=new List<Point>{start,end}};
+ }
+ bool ParallelStreetConflict(Point a,Point b,double width){
+  foreach(var other in plan.Routes.Concat(plan.ConstructionRoutes)){
+   if(other.Use=="pedestrian")continue;
+   for(int j=1;j<other.Points.Count;j++)
+    if(ConstructionGraph.ParallelRibbons(a,b,width,other.Points[j-1],other.Points[j],other.Width))return true;
+  }
+  return false;
+ }
+ bool ParallelStreetConflict(Block block){
+  foreach(var street in block.Pieces.Where(piece=>piece.Kind==1)){
+   var axis=StreetAxis(block,street);
+   for(int i=1;i<axis.Points.Count;i++)
+    if(ParallelStreetConflict(axis.Points[i-1],axis.Points[i],axis.Width))return true;
+  }
+  return false;
+ }
  bool Fits(Block block){
   using(var timingScope=LayoutFunctionTiming.Start(o.FunctionTiming,"Fits")){
   if(!Layout.Contains(block.Bounds,poly))return false;
@@ -154,16 +189,11 @@ internal sealed partial class ResidentialLayout {
   Paint(block.Bounds,block.LandscapeRemainder?CourtGreen:Paved);
   foreach(var r in block.Paving)Paint(r,Paved);
   foreach(var r in block.Pieces)Paint(r,r.Kind==0||r.Kind==2?Fixed:r.Kind);
-  if(!Route(block)){for(int y=b;y<d;y++)for(int x=a;x<c;x++)map[x,y]=backup[x-a,y-b];return false;}
+  if(ParallelStreetConflict(block)||!Route(block)){for(int y=b;y<d;y++)for(int x=a;x<c;x++)map[x,y]=backup[x-a,y-b];return false;}
   plan.PavementPads.AddRange(block.Paving.Select(r=>new Parcel{Kind=8,X=r.X,Y=r.Y,W=r.W,D=r.D}));
   // Retain the original street axes before display raster coalescing loses them.
   foreach(var street in block.Pieces.Where(p=>p.Kind==1)){
-   if(block.StreetAxes.TryGetValue(street,out var explicitAxis)){plan.ConstructionRoutes.Add(explicitAxis);continue;}
-   bool horizontal=street.W>=street.D;
-   var axis=new PlanRoute{Use="aisle",Width=horizontal?street.D:street.W};
-   axis.Points.Add(new Point(horizontal?street.X:street.X+street.W/2,horizontal?street.Y+street.D/2:street.Y));
-   axis.Points.Add(new Point(horizontal?street.X+street.W:street.X+street.W/2,horizontal?street.Y+street.D/2:street.Y+street.D));
-   plan.ConstructionRoutes.Add(axis);
+   plan.ConstructionRoutes.Add(StreetAxis(block,street));
   }
   foreach(var r in block.Pieces)if(r.Kind==0||r.Kind==2){exact.Add(r);spaces+=r.ParkingSpaces;}
   floors+=block.FloorArea;plan.Homes+=block.Homes;modules++;return true;
@@ -336,5 +366,3 @@ internal sealed partial class ResidentialLayout {
  }
 }
 }
-
-

@@ -142,7 +142,12 @@ public static class Layout {
  public static double SignedArea(IList<Point> p){double a=0;for(int i=0;i<p.Count;i++)a+=Cross(p[i],p[(i+1)%p.Count]);return a*.5;}
  static bool On(Point p,Point a,Point b)=>Math.Abs(Cross(b-a,p-a))<E&&p.X>=Math.Min(a.X,b.X)-E&&p.X<=Math.Max(a.X,b.X)+E&&p.Y>=Math.Min(a.Y,b.Y)-E&&p.Y<=Math.Max(a.Y,b.Y)+E;
  static bool Intersects(Point a,Point b,Point c,Point d){double x=Cross(b-a,c-a),y=Cross(b-a,d-a),z=Cross(d-c,a-c),w=Cross(d-c,b-c);return x*y<0&&z*w<0||On(c,a,b)||On(d,a,b)||On(a,c,d)||On(b,c,d);}
- public static bool CanAppend(IList<Point> p,Point next){if(double.IsNaN(next.X)||double.IsNaN(next.Y)||double.IsInfinity(next.X)||double.IsInfinity(next.Y)||p.Count>=128)return false;if(p.Count==0)return true;var last=p[p.Count-1];if((last-next).Length<1)return false;for(int i=0;i<p.Count-2;i++)if(Intersects(last,next,p[i],p[i+1]))return false;return true;}
+ public static bool CanAppend(IList<Point> p,Point next){if(double.IsNaN(next.X)||double.IsNaN(next.Y)||double.IsInfinity(next.X)||double.IsInfinity(next.Y)||p.Count>=128)return false;if(p.Count==0)return true;var last=p[p.Count-1];if((last-next).Length<1)return false;
+  if(p.Count>=2){
+   var previous=p[p.Count-2];
+   if(On(next,previous,last)||On(previous,last,next))return false;
+  }
+  for(int i=0;i<p.Count-2;i++)if(Intersects(last,next,p[i],p[i+1]))return false;return true;}
  public static bool ValidOpen(IList<Point> p){var accepted=new List<Point>();foreach(var point in p){if(!CanAppend(accepted,point))return false;accepted.Add(point);}return true;}
  public static bool Valid(IList<Point> p){if(p.Count<3||p.Count>128||p.Any(v=>double.IsNaN(v.X)||double.IsNaN(v.Y)||double.IsInfinity(v.X)||double.IsInfinity(v.Y)))return false;
   for(int i=0;i<p.Count;i++){if((p[i]-p[(i+1)%p.Count]).Length<1)return false;for(int j=i+1;j<p.Count;j++){if(j==i+1||i==0&&j==p.Count-1)continue;if(Intersects(p[i],p[(i+1)%p.Count],p[j],p[(j+1)%p.Count]))return false;}}return Math.Abs(SignedArea(p))>=100;

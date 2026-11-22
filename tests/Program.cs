@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using ApartmentPlan;
@@ -29,7 +29,30 @@ class Program {
  System.IO.File.WriteAllText("docs/parking-0120/"+(enabled?"on":"off")+".json",Newtonsoft.Json.JsonConvert.SerializeObject(p));
  Console.WriteLine("parking="+enabled+" buildings="+p.Parcels.Count(v=>v.Kind==0)+" bays="+p.Parcels.Count(v=>v.Kind==2));
  }}
+ static void BoundaryTransitions(){
+  int cases=0;
+  foreach(var origin in new[]{new Point(0,0),new Point(120,-48)})
+  foreach(var direction in new[]{new Point(1,0),new Point(-1,0),new Point(0,1),new Point(3,4)}){
+   var end=origin+direction*20;
+   var path=new List<Point>{origin,end};
+   foreach(int distance in new[]{-30,-20,-12,-1,1,5,20}){
+    var next=end+direction*distance;
+    bool expected=distance>0;
+    Check(Layout.CanAppend(path,next)==expected,"append collinear step "+distance);
+    Check(Layout.ValidOpen(new[]{origin,end,next})==expected,"open path collinear step "+distance);
+    cases+=2;
+   }
+   var perpendicular=new Point(-direction.Y,direction.X);
+   Check(Layout.CanAppend(path,end+perpendicular*10),"corner allowed");
+   Check(Layout.CanAppend(path,end-direction*4+perpendicular*2),"nonoverlapping sharp turn allowed");
+   cases+=2;
+  }
+  Console.WriteLine("PASS "+cases+" boundary transition checks");
+ }
  static void Main(string[] args){if(args.Length>0&&args[0]=="--surface-parking"){SurfaceParkingTest();return;}
+ if(args.Length==2&&args[0]=="--layout-sweep"){LayoutSweep.Run(args[1]);return;}
+ if(args.Length==1&&args[0]=="--workflow"){PlanSystem.VerifyWorkflow();LayoutWorkerTests.Run();return;}
+ if(args.Length==1&&args[0]=="--boundary-transitions"){BoundaryTransitions();return;}
  if(args.Length>2&&args[0]=="--issue-replay"){
  var input=Newtonsoft.Json.JsonConvert.DeserializeObject<ReplayInput>(System.IO.File.ReadAllText(args[1]));
  var watch=System.Diagnostics.Stopwatch.StartNew();
@@ -172,6 +195,7 @@ if(args.Length>0&&(args[0]=="--performance"||args[0]=="--performance-timing"||ar
  result.LayoutTimings.Clear();var json=Newtonsoft.Json.JsonConvert.SerializeObject(result);var hash=Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(json)));
  Console.WriteLine("run="+run+" ms="+ms+" allocated="+allocated+" hash="+hash+" buildings="+result.Parcels.Count(p=>p.Kind==0));
  }return;}
+if(args.Length>0&&args[0]=="--villa-entrance-junction"){VillaTests.EntranceJunction();return;}
 if(args.Length>0&&args[0]=="--villa-existing"){VillaTests.ExistingRoads();return;}
 if(args.Length>0&&args[0]=="--villa-junction"){ConstructionTests.VillaJunction();ConstructionTests.VillaNodeSimplify();return;}
 if(args.Length>0&&args[0]=="--tower-feedback"){TowerFeedbackTests.Run();return;}
@@ -320,10 +344,3 @@ var box=new List<Point>{new Point(0,0),new Point(400,0),new Point(400,400),new P
   ReviewTests.Run();MasterPlanTests.Run();ParkingOptionsTests.Run();ParkingTrafficTests.Run();Codec.Test();SnapTests.Run();Console.WriteLine("Representative geometry checks passed; game runtime not tested.");
  }
 }
-
-
-
-
-
-
-

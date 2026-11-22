@@ -30,9 +30,8 @@ export function usePanelPlacement(open:boolean,storageKey="ApartmentPlan.panel")
  },[]);
  React.useEffect(()=>{if(!open){drag.current=null;hover.current=focus.current=false;syncFocus();}},[open]);
  return {layout,setLayout,collapsed,setCollapsed,position,shell,
-  start:(e:React.MouseEvent)=>{if(e.button!==0||(e.target as Element).closest('button'))return;const r=shell.current?.getBoundingClientRect();if(r){drag.current={x:e.clientX,y:e.clientY,left:r.left,top:r.top};syncFocus();e.preventDefault();}},
+  start:(e:React.MouseEvent)=>{if(e.button!==0||(e.target as Element).closest('button'))return;const r=shell.current?.getBoundingClientRect();if(r){window.csPanelLayoutV1.drag(shell.current);drag.current={x:e.clientX,y:e.clientY,left:r.left,top:r.top};syncFocus();e.preventDefault();}},
   enter:()=>{hover.current=true;syncFocus();},leave:()=>{hover.current=false;syncFocus();},
   focus:(e:React.FocusEvent)=>{focus.current=!!(e.target as Element).closest('input,textarea,[contenteditable="true"]');syncFocus();},blur:(e:React.FocusEvent)=>{focus.current=!!(e.relatedTarget&&shell.current?.contains(e.relatedTarget as Node)&&(e.relatedTarget as Element).closest('input,textarea,[contenteditable="true"]'));syncFocus();}
  };
 }
-

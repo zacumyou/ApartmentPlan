@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 namespace ApartmentPlan {
@@ -15,7 +15,7 @@ public sealed class TowerRules {
  public bool Set(string id,double value){var d=Definitions.FirstOrDefault(q=>q.Id==id);if(d==null||double.IsNaN(value)||double.IsInfinity(value))return false;Values[id]=Math.Max(d.Min,Math.Min(d.Max,value));return true;}
  public static TowerRules Parse(string json){var r=new TowerRules();try{var values=Newtonsoft.Json.JsonConvert.DeserializeObject<Dictionary<string,double>>(json??"{}");if(values!=null)foreach(var v in values)r.Set(v.Key,v.Value);}catch(Newtonsoft.Json.JsonException){}return r;}
  public string Encode()=>Newtonsoft.Json.JsonConvert.SerializeObject(Values);
- public object State()=>Definitions.Select(d=>new{id=d.Id,value=this[d.Id],min=d.Min,max=d.Max,step=d.Step}).ToArray();
+ public object State()=>Definitions.Select(d=>new{id=d.Id,defaultValue=d.Default,value=this[d.Id],min=d.Min,max=d.Max,step=d.Step}).ToArray();
 }
 public static class TowerGeometry {
  public static List<Point> SurfaceNodes(IList<Point> input){

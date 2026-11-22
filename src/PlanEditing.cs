@@ -57,7 +57,7 @@ public partial class PlanSystem {
   if(GrassEnabled&&!EntityManager.HasComponent<PlanGrassWork>(stored.Entity))EntityManager.AddComponentData(stored.Entity,new PlanGrassWork{State=0});
   RestoreGrowableProtection();
   FinishCompoundAddition(stored);
-  LandscapeOpen=false;Open=false;Focused=false;Preview.Clear();SelectedPlan=-1;EditingPlan=-1;Exit();
+  ForgetCachedPlan(stored.Info.Number);ResetPlanningInputs();Open=false;Focused=false;SelectedPlan=-1;Exit();
   Trace.Event("plan.construction.recorded","id="+stored.Info.Number);
   QueueStoredAudit(stored.Info.Number);
  }
@@ -98,8 +98,3 @@ public partial class PlanSystem {
  internal object StoredSummary(StoredPlan p)=>p==null?null:new{name=p.Edit?.Name,cleanupShapes=p.Info.Number!=EditingPlan&&!IsBuilt(p)&&p.Edit?.Pending==null&&!HasOwnedObjects(p)?p.Shapes.Count:0,canDelete=CanDeleteTarget(p.Info.Number),deleteReason=DeletionReason(p.Info.Number),parked=p.Info.Number==occupancyPlan?ParkedCount:null,occupiedHomes=p.Info.Number==occupancyPlan?OccupiedHomes:null,parkingCapacity=p.Info.Number==occupancyPlan?LiveParkingCapacity:null,homeCapacity=p.Info.Number==occupancyPlan?LiveHomeCapacity:null,owned=OwnedObjects(p).Count,id=p.Info.Number,area=p.Info.Area,far=p.Info.Far,homes=p.Info.Homes,built=WasConstructed(p.Entity)||p.Edit?.NativeCommitted==true,buildings=p.Edit?.AppliedPlans!=null?p.Edit.AppliedPlans.Sum(plan=>plan.Parcels.Count(r=>r.Kind==0)):p.Shapes.Count(s=>s.Kind==0),parking=p.Edit?.AppliedPlans!=null?p.Edit.AppliedPlans.Sum(plan=>plan.Parcels.Sum(r=>r.ParkingSpaces)):p.Edit?.Draft?.Parcels.Sum(r=>r.ParkingSpaces),editable=Layout.Valid(StoredBoundary(p)),legacy=p.Edit==null};
 }
 }
-
-
-
-
-

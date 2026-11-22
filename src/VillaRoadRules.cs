@@ -4,6 +4,28 @@ using System.Linq;
 namespace ApartmentPlan {
 public static class VillaRoadRules {
  static string Key(Point p)=>Math.Round(p.X*100)+","+Math.Round(p.Y*100);
+ // Stop an entrance at its first street. Extending past that point can fold
+ // the elbow back alongside the approach, producing two overlapping roads.
+ internal static bool TrimEntrance(List<Point> path,IList<ConstructionEdge> streets){
+  for(int i=1;i<path.Count;i++){
+   var start=path[i-1];var step=path[i]-start;double length=step.Length;
+   if(length<.01)continue;
+   if(i>1&&SiteFrame.Dot(VillaGeometry.Unit(step),VillaGeometry.Unit(start-path[i-2]))<-.8)return false;
+   double first=double.PositiveInfinity;
+   foreach(var street in streets){
+    var span=street.B-street.A;double cross=Layout.Cross(step,span);
+    if(Math.Abs(cross)<1e-8)continue;
+    double t=Layout.Cross(street.A-start,span)/cross,u=Layout.Cross(street.A-start,step)/cross;
+    if(t>0&&t<=1.0000001&&u>=-1e-7&&u<=1.0000001&&t<first)first=t;
+   }
+   if(double.IsPositiveInfinity(first))continue;
+   if(first*length<2)return false; // Add() drops segments shorter than two metres.
+   path[i]=start+step*Math.Min(1,first);
+   path.RemoveRange(i+1,path.Count-i-1);
+   return true;
+  }
+  return true;
+ }
  public static bool Through(List<ConstructionEdge> edges,List<Point> roots,List<Point> directions,double width){
   var nodes=new Dictionary<string,Point>();var adjacent=new Dictionary<string,List<ConstructionEdge>>();
   foreach(var e in edges.Where(e=>e.Use=="main"))foreach(var p in new[]{e.A,e.B}){string k=Key(p);nodes[k]=p;if(!adjacent.ContainsKey(k))adjacent[k]=new List<ConstructionEdge>();adjacent[k].Add(e);}

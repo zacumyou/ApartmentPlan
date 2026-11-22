@@ -50,7 +50,7 @@ internal sealed partial class ResidentialLayout {
      int neighbor=end==0?1:end-1;var from=route.Points[neighbor];
      foreach(var e in connected.OrderBy(e=>Math.Min((e.A-world).Length,(e.B-world).Length))){
       var d=e.B-e.A;double t=Math.Max(0,Math.Min(1,SiteFrame.Dot(world-e.A,d)/SiteFrame.Dot(d,d)));var q=plan.Local(e.A+d*t);
-      if((q-old).Length>Math.Max(8,route.Width)||!ClearVehicleRibbon(from,q,route.Width))continue;
+      if((q-old).Length>Math.Max(8,route.Width)||!ClearVehicleRibbon(from,q,route.Width)||ParallelStreetConflict(from,q,route.Width))continue;
       route.Points[end]=q;var next=ConstructionGraph.Create(plan).Where(v=>v.Use!="pedestrian").ToList();
       if(next.Count-EntranceComponent(plan,next).Count<isolated.Length){PaintVehicleRibbon(from,q,route.Width);snapped=true;break;}
       route.Points[end]=old;
@@ -64,11 +64,11 @@ internal sealed partial class ResidentialLayout {
    void Candidate(Point a,ConstructionEdge e){var d=e.B-e.A;double t=Math.Max(0,Math.Min(1,SiteFrame.Dot(a-e.A,d)/SiteFrame.Dot(d,d)));var b=e.A+d*t;double length=(b-a).Length;
     if(length>=o.ParkingAisle+.25&&length<=o.MaxAccessLength)candidates.Add(Tuple.Create(plan.Local(a),plan.Local(b),length));
    }
-   foreach(var e in isolated)foreach(var other in connected){Candidate(e.A,other);Candidate(e.B,other);Candidate(other.A,e);Candidate(other.B,e);}
+   foreach(var e in isolated)foreach(var other in connected){Candidate(e.A,other);Candidate(e.B,other);Candidate(other.A,e);Candidate(other.B,e);Candidate((e.A+e.B)*.5,other);Candidate((other.A+other.B)*.5,e);}
    bool repaired=false;
    foreach(var c in candidates.OrderBy(c=>c.Item3)){
     double width=o.WideParkingAisle>o.ParkingAisle&&c.Item3>=o.WideParkingAisle+.25&&ClearVehicleRibbon(c.Item1,c.Item2,o.WideParkingAisle)?o.WideParkingAisle:o.ParkingAisle;
-    if(c.Item3<width+.25||!ClearVehicleRibbon(c.Item1,c.Item2,width))continue;
+    if(c.Item3<width+.25||!ClearVehicleRibbon(c.Item1,c.Item2,width)||ParallelStreetConflict(c.Item1,c.Item2,width))continue;
     var route=new PlanRoute{Use=width>o.ParkingAisle?"aisleWide":"aisle",Width=width,Points=new List<Point>{c.Item1,c.Item2}};plan.Routes.Add(route);
     var next=ConstructionGraph.Create(plan).Where(e=>e.Use!="pedestrian").ToList();
     if(next.Count-EntranceComponent(plan,next).Count>=isolated.Length){plan.Routes.Remove(route);continue;}

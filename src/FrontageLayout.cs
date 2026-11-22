@@ -253,6 +253,9 @@ internal sealed partial class ResidentialLayout {
   }
   bool first=Connect(ref low,true),last=Connect(ref high,false);
   if(!first&&!last)return false;
+  var axisStart=new Point(horizontal?low:across+bay+aisle/2,horizontal?across+bay+aisle/2:low);
+  var axisEnd=new Point(horizontal?high:across+bay+aisle/2,horizontal?across+bay+aisle/2:high);
+  if(ParallelStreetConflict(axisStart,axisEnd,aisle))return false;
   var street=Part(low,across+bay,high-low,aisle,1);Paint(street,1);
   foreach(var row in rows){
    row.ParkingSpaces=(int)Math.Round(run/o.BayWidth);
@@ -264,8 +267,7 @@ internal sealed partial class ResidentialLayout {
    Paint(row,Fixed);exact.Add(row);spaces+=row.ParkingSpaces;
   }
   plan.ConstructionRoutes.Add(new PlanRoute{Use="aisle",Width=aisle,Points=new List<Point>{
-   new Point(horizontal?low:across+bay+aisle/2,horizontal?across+bay+aisle/2:low),
-   new Point(horizontal?high:across+bay+aisle/2,horizontal?across+bay+aisle/2:high)}});
+   axisStart,axisEnd}});
   return true;
  }
  // Match neighbouring rows before trying shorter free-space modules. Both
@@ -325,9 +327,10 @@ internal sealed partial class ResidentialLayout {
    for(double d=0;d<=o.MaxAccessLength;d+=cell){double edge=Snap(across+depth)+d;var test=Strip(across,edge);if(!ParkingStreetSpace(test))break;if(KindRectangle(Strip(edge-width,edge),1)){hi=edge-width/2;break;}}
    if(double.IsNaN(lo)&&double.IsNaN(hi))continue;
    if(double.IsNaN(lo))lo=across+width/2;if(double.IsNaN(hi))hi=across+depth-width/2;if(hi<=lo)continue;
-   var street=Strip(lo-width/2,hi+width/2);if(!ParkingStreetSpace(street))continue;Paint(street,1);
+   var street=Strip(lo-width/2,hi+width/2);if(!ParkingStreetSpace(street))continue;
    var points=h?new List<Point>{new Point(along+width/2,lo),new Point(along+width/2,hi)}:new List<Point>{new Point(lo,along+width/2),new Point(hi,along+width/2)};
-   plan.ConstructionRoutes.Add(new PlanRoute{Use="aisle",Width=width,Points=points});
+   if(ParallelStreetConflict(points[0],points[1],width))continue;
+   Paint(street,1);plan.ConstructionRoutes.Add(new PlanRoute{Use="aisle",Width=width,Points=points});
   }
  }
  void SharedFrontageParking(){
@@ -355,4 +358,3 @@ internal sealed partial class ResidentialLayout {
  }
 }
 }
-

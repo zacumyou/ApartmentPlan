@@ -19,30 +19,16 @@ public partial class PlanSystem {
  Dictionary<string,int> lastPlanning;
  internal bool LayoutPending,LayoutOutdated;Action layoutRejected;Plan layoutPrevious;
  void CancelLayout(){lastPlanning=null;layoutDebounce.Cancel();layoutWorker.Cancel();LayoutPending=false;layoutRejected=null;}
- void Rebuild(Action rejected=null){
-  if(!Mod.Options.AutoCalculate){
-   // Deferred edits stay in the input model. A later failure must not roll back
-   // just one edit while silently accepting the others against an older plan.
-   CancelLayout();LayoutOutdated=true;Status="AP.CalculationNeeded";Revision++;return;
-  }
-  // Transactional edits retain their immediate rollback callback. Ordinary
-  // changes are sampled only after the user stops editing for one second.
-  if(rejected!=null||(!Entrance.HasValue&&!Villa)||!Layout.Valid(Boundary)){CalculateLayout(rejected);return;}
-  CancelLayout();LayoutOutdated=true;layoutDebounce.Schedule(UnityEngine.Time.realtimeSinceStartupAsDouble);Status="AP.LayoutWaiting";Revision++;
- }
+ void ScheduleLayout()=>layoutDebounce.Schedule(UnityEngine.Time.realtimeSinceStartupAsDouble);
  void ToggleAutoCalculate(){
   if(NativeCommitted||World.GetExistingSystemManaged<Game.Tools.ToolSystem>()?.activeTool is ConstructionTool)return;
-  Mod.Options.AutoCalculate=!Mod.Options.AutoCalculate;Mod.Options.ApplyAndSave();
-  if(!Mod.Options.AutoCalculate){
-   if(LayoutPending||layoutDebounce.Pending){CancelLayout();LayoutOutdated=true;Status="AP.CalculationNeeded";}
-  }else if(!NativeCommitted&&Layout.Valid(Boundary)&&(Entrance.HasValue||Villa))CalculateLayout();
-  Revision++;
+  ChangeAutoCalculation();
  }
  void CalculateLayout(Action rejected=null){
   EnsurePlanningCatalog();
   if(!catalogReady||CatalogLoading){Status="AP.CatalogLoading";Revision++;return;}
   EntranceLength=Mod.Options.EntranceLength;ReplacementIndex=-1;CancelLayout();LayoutOutdated=true;
-  if((!Entrance.HasValue&&!Villa)||!Layout.Valid(Boundary)){Draft=null;Preview.Clear();Revision++;return;}
+  if(Entrances.Count==0||!Layout.Valid(Boundary)){Draft=null;Preview.Clear();LayoutOutdated=false;Status=Mode=="entrance"?"AP.PickEntrance":"AP.Draw";Revision++;return;}
   if(!World.GetOrCreateSystemManaged<InvisibleRoadPrefabs>().Available){Status="AP.RoadPackMissing";Revision++;return;}
   var existingVillaRoads=Villa?CollectVillaExistingRoads():new List<PlanRoute>();
   // Missing initialization must never silently turn into mismatched widths

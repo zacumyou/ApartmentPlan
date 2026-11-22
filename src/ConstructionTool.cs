@@ -49,7 +49,7 @@ public partial class ConstructionTool:ToolBaseSystem {
   Trace.Event("construction.failure.evidence",Newtonsoft.Json.JsonConvert.SerializeObject(failureEvidence),true);
   Trace.Event("construction.failure.metrics",string.Join(" ",Metrics.Select(p=>p.Key+"="+p.Value)));
  }
- void Status(string key,string detail=""){var s=Plans;if(s==null)return;if(key=="AP.NativeBlocked"&&World.GetExistingSystemManaged<ToolSystem>()?.activeTool!=this)return;if(key=="AP.NativeBlocked"){CaptureFailure();if(WarningShapes.Count>0)Notice=warningNotice.Length>0?warningNotice:"AP.Warning.Native";}else if(key=="AP.NativeReady"||key=="AP.NativeApplied")ClearWarnings();if(key=="AP.NativeBlocked"&&s.Status!=key)s.Sound(PlanSound.Fail);s.Status=key;Report=detail;s.Revision++;Trace.Event("construction."+key,detail,Trace.LocalTower);}
+ void Status(string key,string detail=""){var s=Plans;if(s==null)return;if(key=="AP.NativeBlocked"&&World.GetExistingSystemManaged<ToolSystem>()?.activeTool!=this)return;if(key=="AP.NativeBlocked"){CaptureFailure();if(WarningShapes.Count>0)Notice=warningNotice.Length>0?warningNotice:"AP.Warning.Native";}else if(key=="AP.NativeReady"||key=="AP.NativeApplied")ClearWarnings();if(key=="AP.DemolitionApplied"){ClearWarnings();Notice="";}if(key=="AP.NativeBlocked"&&s.Status!=key)s.Sound(PlanSound.Fail);s.Status=key;Report=detail;s.Revision++;Trace.Event("construction."+key,detail,Trace.LocalTower);}
  FrameWork previewWork;ValidationResult validation;
  bool AdvanceWork(){
   if(!previewWork.Step())return false;
@@ -282,5 +282,3 @@ public partial class ConstructionTool:ToolBaseSystem {
  }
 }
 }
-
-
