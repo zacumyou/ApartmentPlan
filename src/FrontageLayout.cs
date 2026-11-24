@@ -36,8 +36,10 @@ internal sealed partial class ResidentialLayout {
  bool ClearOfMain(Parcel r){
   using(var timingScope=LayoutFunctionTiming.Start(o.FunctionTiming,"ClearOfMain")){
   double gap=o.MainParkingSetback;
-  var expanded=new Parcel{X=r.X-gap,Y=r.Y-gap,W=r.W+2*gap,D=r.D+2*gap};
-  Bounds(expanded,out int a,out int b,out int c,out int d);
+  double left=r.X-gap,bottom=r.Y-gap;
+  int a=Math.Max(0,X(left)),b=Math.Max(0,Y(bottom));
+  int c=Math.Min(nx,(int)Math.Ceiling((left+(r.W+2*gap)-x0)/cell-1e-7));
+  int d=Math.Min(ny,(int)Math.Ceiling((bottom+(r.D+2*gap)-y0)/cell-1e-7));
   return mainSum[c,d]-mainSum[a,d]-mainSum[c,b]+mainSum[a,b]==0;
  
   }
@@ -64,7 +66,7 @@ internal sealed partial class ResidentialLayout {
   using(var timingScope=LayoutFunctionTiming.Start(o.FunctionTiming,"PlaceFrontage")){
   var building=block.Pieces[0];
   if(exact.Any(r=>r.Kind==0&&!FrontageRules.Spaced(building,r,o.ParallelGap,o.Gap)))return false;
-  if(edgeOnly&&Layout.Contains(new Parcel{X=building.X-12,Y=building.Y-12,W=building.W+24,D=building.D+24},poly))return false;
+  if(edgeOnly&&SiteContains(new Parcel{X=building.X-12,Y=building.Y-12,W=building.W+24,D=building.D+24}))return false;
   return Place(block);
  
   }
@@ -164,19 +166,23 @@ internal sealed partial class ResidentialLayout {
   using(var timingScope=LayoutFunctionTiming.Start(o.FunctionTiming,"FrontageHousing")){
   if(assets.Count==0)return;
   if(includeCourts)CourtyardHousing();
+  var represented=new HashSet<string>(exact.Where(q=>q.Kind==0).Select(q=>q.AssetId));
+  var missing=assets.Where(a=>!represented.Contains(a.Id)).OrderByDescending(a=>a.Width*a.Depth).ToList();
+  bool mixed=reserveSizes&&assets.Select(a=>(a.Width,a.Depth)).Distinct().Skip(1).Any();
   var infillRoads=InfillRoadIndex();
   double gap=Snap(Math.Max(o.ParallelGap,o.Road));
   // Fill residual pockets from local candidates. A modest orientation balance
   // selects trial order only: constraints decide fit, not a horizontal/vertical
   // zoning band. Independent end lines follow each court and available street.
-  for(int pass=0;pass<(o.EdgeInfill?2:1);pass++){
+  for(int pass=mixed&&missing.Count>0?-1:0;pass<(o.EdgeInfill?2:1);pass++){
    int stride=pass==0?4:2;
    for(int iy=1;iy<ny-1&&!Full;iy+=stride)for(int ix=1;ix<nx-1&&!Full;ix+=stride){
+    if(pass<0&&missing.Count==0)break;
     if(map[ix,iy]!=Green)continue;
     int total=exact.Count(r=>r.Kind==0),vertical=exact.Count(r=>r.Kind==0&&r.D>r.W);
     bool preferVertical=(o.MixedDirections||o.BuildingPattern==3)&&vertical<total*.34;
     bool placed=false;
-    foreach(var a in AssetChoice.Shuffle(assets,assetRandom)){
+    foreach(var a in pass<0?missing:AssetChoice.Shuffle(assets,assetRandom)){
     foreach(bool rotated in new[]{preferVertical,!preferVertical}){
      if(rotated&&!o.MixedDirections&&o.BuildingPattern==0)continue;
      for(int side=0;side<2&&!placed;side++){
@@ -185,7 +191,7 @@ internal sealed partial class ResidentialLayout {
       if(block.Pieces.Any(p=>p.Kind==0&&!BarOrientationAllowed(p)))continue;
       if(!HasInfillTarget(block,infillRoads)||!PlaceFrontage(block))continue;
       infillRoads=InfillRoadIndex();
-      placed=true;break;
+      missing.Remove(a);placed=true;break;
      }
      if(placed)break;
     }
@@ -198,14 +204,14 @@ internal sealed partial class ResidentialLayout {
  }
 
  bool KindRectangle(Parcel r,int kind){
-  if(!Layout.Contains(r,poly))return false;Bounds(r,out int a,out int b,out int c,out int d);
+  if(!SiteContains(r))return false;Bounds(r,out int a,out int b,out int c,out int d);
   for(int y=b;y<d;y++)for(int x=a;x<c;x++)if(map[x,y]!=kind)return false;return true;
  }
  bool ParkingSpace(Parcel r){
   if(r.X<x0||r.Y<y0||r.X+r.W>x0+nx*cell||r.Y+r.D>y0+ny*cell)return false;
   Bounds(r,out int a,out int b0,out int c,out int d);
   for(int y=b0;y<d;y++)for(int x=a;x<c;x++)if(reserved[x,y]||edgeGreen[x,y]||map[x,y]!=Green&&map[x,y]!=Paved&&(map[x,y]!=CourtGreen||o.ParkingIsland>0))return false;
-  if(!Layout.Contains(r,poly)||!ClearOfMain(r))return false;
+  if(!SiteContains(r)||!ClearOfMain(r))return false;
   // Infill must not reintroduce a full-width walk along every building either.
   foreach(var lot in exact.Where(p=>p.Kind==0)){
    if(Layout.Overlap(lot,r))return false;
@@ -222,7 +228,7 @@ internal sealed partial class ResidentialLayout {
   Bounds(r,out int a,out int b,out int c,out int d);
   for(int y=b;y<d;y++)for(int x=a;x<c;x++)if(reserved[x,y]||edgeGreen[x,y]||
    map[x,y]!=1&&map[x,y]!=Green&&map[x,y]!=Paved&&(map[x,y]!=CourtGreen||o.ParkingIsland>0))return false;
-  return Layout.Contains(r,poly)&&ClearOfMain(r)&&!exact.Any(p=>Layout.Overlap(p,r));
+  return SiteContains(r)&&ClearOfMain(r)&&!exact.Any(p=>Layout.Overlap(p,r));
  }
  bool TryParkingPair(bool horizontal,double along,double run,double across,double aisle){
   double bay=Snap(o.BayDepth),end=o.ParkingEndClearance;
@@ -339,7 +345,7 @@ internal sealed partial class ResidentialLayout {
   // counts once and reject unserved candidates before expensive lot/access tests.
   var roadCounts=new int[nx+1,ny+1];
   for(int y=0;y<ny;y++)for(int x=0;x<nx;x++)roadCounts[x+1,y+1]=(map[x,y]==1?1:0)+roadCounts[x,y+1]+roadCounts[x+1,y]-roadCounts[x,y];
-  bool RoadRectangle(Parcel r){Bounds(r,out int a,out int b,out int c,out int d);if(a>nx||b>ny||c<0||d<0||c<a||d<b)return KindRectangle(r,1);return roadCounts[c,d]-roadCounts[a,d]-roadCounts[c,b]+roadCounts[a,b]==(c-a)*(d-b)&&Layout.Contains(r,poly);}
+  bool RoadRectangle(Parcel r){Bounds(r,out int a,out int b,out int c,out int d);if(a>nx||b>ny||c<0||d<0||c<a||d<b)return KindRectangle(r,1);return roadCounts[c,d]-roadCounts[a,d]-roadCounts[c,b]+roadCounts[a,b]==(c-a)*(d-b)&&SiteContains(r);}
   double target=plan.Homes>0?Math.Ceiling(plan.Homes*o.ParkingPerHome*o.SurfaceParkingShare):plan.Area*o.Parking/o.SpaceArea;
   // Fill already served space after all housing is fixed. No dwelling is lost
   // to a parking quota. Shortfall remains visible; no underground capacity invented.
@@ -358,3 +364,4 @@ internal sealed partial class ResidentialLayout {
  }
 }
 }
+

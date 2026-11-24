@@ -12,9 +12,10 @@ public partial class PlanSystem {
   internal bool ParkingInOpenSpace;
  }
  readonly Dictionary<int,TabDraft> modeDrafts=new Dictionary<int,TabDraft>();
+ internal Point? RejectedGate;
  internal bool CanReviewLayout=>Entrances.Count>0&&Selected.Count>0&&Draft!=null&&!LayoutPending&&!LayoutOutdated;
  void ResetPlanningInputs(){
-  CancelLayout();ClearInputHistory();ResetDeletionDialog();LayoutOutdated=false;LandscapeOpen=false;
+  RejectedGate=null;CancelLayout();ClearInputHistory();ResetDeletionDialog();LayoutOutdated=false;LandscapeOpen=false;
   compoundFullDraft=null;EditingPlan=-1;NativeCommitted=false;
   Boundary.Clear();VillaConnections.Clear();Ramps.Clear();ClearRoadEdit();Entrances.Clear();Zones.Clear();ZonePoints.Clear();
   Elevation=0;ClearForcedBuilding();ReplacementIndex=-1;Draft=null;Entrance=null;Preview.Clear();treePlan=null;treeKey=null;PlannedTrees.Clear();
@@ -36,9 +37,11 @@ public partial class PlanSystem {
  void SwitchPlanMode(int mode){
    // Switching tabs preserves each unfinished draft, including connection exclusions.
    modeDrafts[Mod.Options.PlanMode]=new TabDraft{Stage=Mode,ZoneKind=ZoneKind,ZonePoints=ZonePoints.ToList(),BoundaryRedo=boundaryRedo.ToList(),EntranceRedo=entranceRedo.ToList(),ParkingInOpenSpace=Mod.Options.ParkingInOpenSpace,Plan=new PlanEditData{Elevation=Elevation,Boundary=Boundary.ToList(),Entrances=Entrances.ToList(),Zones=Zones.ToList(),Ramps=Ramps.ToList(),Roads=Roads.ToList(),Draft=Draft,Selected=Selected.ToArray(),VillaConnections=VillaConnections.ToList(),NativeCommitted=NativeCommitted,EditingNumber=EditingPlan}};
+   var source=modeDrafts[Mod.Options.PlanMode].Plan;
+   bool carrySite=source.Draft!=null&&!NativeCommitted&&Layout.Valid(source.Boundary);
    Trace.Event("plan.mode.changed","from="+Mod.Options.PlanMode+" to="+mode,Trace.LocalTower);
    Mod.Options.PlanMode=mode;ResetPlanningInputs();Mod.Options.ParkingInOpenSpace=false;Status="AP.Draw";SelectedPlan=-1;Activate();Selected.Clear();
-   if(modeDrafts.TryGetValue(mode,out var tab)){
+   if(modeDrafts.TryGetValue(mode,out var tab)&&(!carrySite||tab.Plan.Boundary.Count>0)){
     modeDrafts.Remove(mode);
     var d=tab.Plan;
     Mode=tab.Stage;Elevation=d.Elevation;ZoneKind=tab.ZoneKind;ZonePoints.AddRange(tab.ZonePoints);
@@ -47,7 +50,20 @@ public partial class PlanSystem {
     Boundary.AddRange(d.Boundary);Entrances.AddRange(d.Entrances);Zones.AddRange(d.Zones);Ramps.AddRange(d.Ramps);Roads.AddRange(d.Roads);VillaConnections.AddRange(d.VillaConnections);foreach(var id in d.Selected)Selected.Add(id);Draft=d.Draft;NativeCommitted=d.NativeCommitted;EditingPlan=d.EditingNumber;
     Entrance=Entrances.Count>0?(Point?)Entrances[0]:null;Status=Mode=="entrance"?"AP.PickEntrance":Mode=="edit"?"AP.EditBoundary":Mode=="zone"?"AP.DrawZone":Mode=="road"?RoadHint:Mode=="replace"?"AP.PickBuilding":"AP.Draw";if(!Entrance.HasValue)Draft=null;
     if(Draft!=null)RenderDraft();
-   }else LoadDefaultModeAssets();
+   }else{
+    modeDrafts.Remove(mode);
+    LoadDefaultModeAssets();
+    if(carrySite){
+     Elevation=source.Elevation;
+     Boundary.AddRange(source.Boundary);
+     Mode="entrance";Status="AP.PickEntrance";
+     if(Villa)DetectVillaConnections();
+     else{
+      Entrances.AddRange(source.Entrances);
+      Entrance=Entrances.Count>0?(Point?)Entrances[0]:null;
+     }
+    }
+   }
    if(Entrance.HasValue&&Layout.Valid(Boundary)&&!NativeCommitted)Rebuild();Mod.Options.ApplyAndSave();Revision++;
  }
  void EnterEntranceStage(){

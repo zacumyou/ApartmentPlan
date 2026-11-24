@@ -17,7 +17,7 @@ internal sealed partial class ResidentialLayout {
    }
   double maxSpan=Math.Min(o.MaxAccessLength,2*Snap(o.BayDepth)+3*width+2*o.ParkingEndClearance);
   bool Space(Parcel r){
-   if(!Layout.Contains(r,poly)||!ClearOfMain(r)||exact.Any(p=>Layout.Overlap(p,r)))return false;
+   if(!SiteContains(r)||!ClearOfMain(r)||exact.Any(p=>Layout.Overlap(p,r)))return false;
    Bounds(r,out int a,out int b,out int c,out int d);
    for(int y=b;y<d;y++)for(int x=a;x<c;x++)if(reserved[x,y]||edgeGreen[x,y]||
     map[x,y]!=1&&map[x,y]!=Green&&map[x,y]!=Paved&&map[x,y]!=9&&(map[x,y]!=CourtGreen||o.ParkingIsland>0))return false;

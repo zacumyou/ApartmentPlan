@@ -6,6 +6,26 @@ namespace ApartmentPlan {
 // so T-junctions use exactly equal endpoint positions rather than visual contact.
 public sealed class ConstructionEdge {public Point A,B;public string Use;public double Width;}
 public static class ConstructionGraph {
+ // Buckets preserve insertion order for endpoint ties. Multi-cell queries only
+ // collect earlier indices; split parameters are sorted before edges are emitted.
+ internal sealed class EdgeGrid {
+  readonly Dictionary<(int,int),List<int>> cells=new Dictionary<(int,int),List<int>>();
+  static int Cell(double x)=>(int)Math.Floor(x/32);
+  public void Add(int index,ConstructionEdge edge,double pad){
+   for(int x=Cell(Math.Min(edge.A.X,edge.B.X)-pad);x<=Cell(Math.Max(edge.A.X,edge.B.X)+pad);x++)
+    for(int y=Cell(Math.Min(edge.A.Y,edge.B.Y)-pad);y<=Cell(Math.Max(edge.A.Y,edge.B.Y)+pad);y++){
+     if(!cells.TryGetValue((x,y),out var entries))cells[(x,y)]=entries=new List<int>();
+     entries.Add(index);
+    }
+  }
+  public List<int> At(Point p)=>cells.TryGetValue((Cell(p.X),Cell(p.Y)),out var entries)?entries:null;
+  public void Collect(ConstructionEdge edge,double pad,HashSet<int> result){
+   result.Clear();
+   for(int x=Cell(Math.Min(edge.A.X,edge.B.X)-pad);x<=Cell(Math.Max(edge.A.X,edge.B.X)+pad);x++)
+    for(int y=Cell(Math.Min(edge.A.Y,edge.B.Y)-pad);y<=Cell(Math.Max(edge.A.Y,edge.B.Y)+pad);y++)
+     if(cells.TryGetValue((x,y),out var entries))foreach(int index in entries)result.Add(index);
+  }
+ }
  internal static bool ParallelRibbons(Point a,Point b,double width,Point c,Point d,double otherWidth){
   var span=b-a;double length=span.Length;
   if(length<.1||(d-c).Length<.1)return false;
@@ -25,11 +45,17 @@ public static class ConstructionGraph {
   // Raster routes stop when their full footprint reaches another road's ribbon.
   // Extend to its centreline so a visual touch becomes a real junction.
   var extensions=new List<ConstructionEdge>();
+  var endpoints=new EdgeGrid();
+  if(!plan.Tower&&!plan.VillaExistingRoadsOnly)for(int i=0;i<raw.Count;i++)endpoints.Add(i,raw[i],Math.Max(.03,raw[i].Width/2+2)+1e-8);
   foreach(var e in raw)foreach(var p in new[]{e.A,e.B}){
    if(plan.Tower||plan.VillaExistingRoadsOnly)continue; // Tower endpoints and pedestrian gaps are explicit geometry.
    ConstructionEdge target=null;Point join=default;double best=double.MaxValue;
    var outward=(p-e.A).Length<.001?e.A-e.B:e.B-e.A;
-   foreach(var other in raw){if(ReferenceEquals(e,other)||e.Use!="pedestrian"&&other.Use=="pedestrian")continue;
+   var nearby=endpoints.At(p);if(nearby==null)continue;
+   foreach(int id in nearby){var other=raw[id];if(ReferenceEquals(e,other)||e.Use!="pedestrian"&&other.Use=="pedestrian")continue;
+    double reach=Math.Max(.03,other.Width/2+2)+1e-8;
+    if(p.X<Math.Min(other.A.X,other.B.X)-reach||p.X>Math.Max(other.A.X,other.B.X)+reach||
+       p.Y<Math.Min(other.A.Y,other.B.Y)-reach||p.Y>Math.Max(other.A.Y,other.B.Y)+reach)continue;
     var d=other.B-other.A;double t=Math.Max(0,Math.Min(1,SiteFrame.Dot(p-other.A,d)/SiteFrame.Dot(d,d)));var q=other.A+d*t;double distance=(q-p).Length;
     // Near contact still needs a split and shared node. The short-edge contraction below welds it.
     if(distance<.03){target=other;join=q;best=distance;break;}
@@ -45,27 +71,32 @@ public static class ConstructionGraph {
   }
   raw.AddRange(extensions);
   var cuts=raw.Select(e=>new List<double>{0,1}).ToArray();
-  for(int i=0;i<raw.Count;i++)for(int j=0;j<i;j++){
+  var crossingGrid=new EdgeGrid();var neighbors=new HashSet<int>();
+  for(int i=0;i<raw.Count;i++){
+   double pad=.021+(raw[i].B-raw[i].A).Length*1e-7;
+   crossingGrid.Collect(raw[i],pad,neighbors);crossingGrid.Add(i,raw[i],pad);
+   foreach(int j in neighbors){
    var a=raw[i];var b=raw[j];if((a.Use=="pedestrian")!=(b.Use=="pedestrian"))continue;var u=a.B-a.A;var v=b.B-b.A;double cross=Layout.Cross(u,v);
    if(Math.Abs(cross)>1e-8){double t=Layout.Cross(b.A-a.A,v)/cross,s=Layout.Cross(b.A-a.A,u)/cross;if(t>=-1e-7&&t<=1+1e-7&&s>=-1e-7&&s<=1+1e-7){cuts[i].Add(Math.Max(0,Math.Min(1,t)));cuts[j].Add(Math.Max(0,Math.Min(1,s)));}}
    else if(Math.Abs(Layout.Cross(b.A-a.A,u))/u.Length<.02){foreach(var p in new[]{b.A,b.B})Cut(a,p,cuts[i]);foreach(var p in new[]{a.A,a.B})Cut(b,p,cuts[j]);}
   }
-  var result=new List<ConstructionEdge>();var keys=new HashSet<string>();
+  }
+  var result=new List<ConstructionEdge>();var keys=new HashSet<((long,long),(long,long))>();
   // Main road wins duplicate spans at entrances and shared court connections.
   foreach(int i in Enumerable.Range(0,raw.Count).OrderBy(i=>raw[i].Use=="main"?0:raw[i].Use=="aisleWide"?1:raw[i].Use=="aisle"?2:3)){
    var e=raw[i];var t=cuts[i].Distinct().OrderBy(x=>x).ToList();
-   for(int k=1;k<t.Count;k++){var a=e.A+(e.B-e.A)*t[k-1];var b=e.A+(e.B-e.A)*t[k];if((b-a).Length<.000001)continue;string ka=Key(a),kb=Key(b),key=string.CompareOrdinal(ka,kb)<0?ka+"/"+kb:kb+"/"+ka;if(keys.Add(key))result.Add(new ConstructionEdge{A=a,B=b,Use=e.Use,Width=e.Width});}
+   for(int k=1;k<t.Count;k++){var a=e.A+(e.B-e.A)*t[k-1];var b=e.A+(e.B-e.A)*t[k];if((b-a).Length<.000001)continue;if(keys.Add(SpanKey(a,b)))result.Add(new ConstructionEdge{A=a,B=b,Use=e.Use,Width=e.Width});}
   }
   // Nearby cuts can create sub-10cm junction spans. Dropping that edge alone
   // disconnects the road graph. Contract its two nodes across every incident
   // edge instead, retaining the first (main-road-priority) endpoint.
   while(true){
    var shortEdge=result.FirstOrDefault(e=>(e.B-e.A).Length<.1);if(shortEdge==null)break;
-   var a=shortEdge.A;string b=Key(shortEdge.B);
-   foreach(var e in result){if(Key(e.A)==b)e.A=a;if(Key(e.B)==b)e.B=a;}
+   var a=shortEdge.A;var b=RoundedNode(shortEdge.B);
+   foreach(var e in result){if(RoundedNode(e.A).Equals(b))e.A=a;if(RoundedNode(e.B).Equals(b))e.B=a;}
    result.Remove(shortEdge);result.RemoveAll(e=>(e.B-e.A).Length<.000001);
   }
-  keys.Clear();result.RemoveAll(e=>{string a=Key(e.A),b=Key(e.B);return !keys.Add(string.CompareOrdinal(a,b)<0?a+"/"+b:b+"/"+a);});
+  keys.Clear();result.RemoveAll(e=>!keys.Add(SpanKey(e.A,e.B)));
   MergeStraight(result);
   // Raster targets can leave very short path corners/junctions. Collapse only
   // pedestrian nodes, and recheck the full corridor against lots and the site.
@@ -109,21 +140,26 @@ public static class ConstructionGraph {
  static void JoinRibbonComponents(List<ConstructionEdge> edges,bool preserveHeading){
   while(true){
    var roads=edges.Where(e=>e.Use!="pedestrian").ToList();
-   var incident=new Dictionary<string,List<int>>();
-   for(int i=0;i<roads.Count;i++)foreach(var p in new[]{roads[i].A,roads[i].B}){var key=Key(p);if(!incident.TryGetValue(key,out var list))incident[key]=list=new List<int>();list.Add(i);}
+   var incident=new Dictionary<(long,long),List<int>>();
+   for(int i=0;i<roads.Count;i++)foreach(var p in new[]{roads[i].A,roads[i].B}){var key=RoundedNode(p);if(!incident.TryGetValue(key,out var list))incident[key]=list=new List<int>();list.Add(i);}
    var component=Enumerable.Repeat(-1,roads.Count).ToArray();int count=0;
    for(int i=0;i<roads.Count;i++){if(component[i]>=0)continue;var queue=new List<int>{i};component[i]=count;
-    for(int at=0;at<queue.Count;at++){int j=queue[at];foreach(var p in new[]{roads[j].A,roads[j].B})foreach(int k in incident[Key(p)])if(component[k]<0){component[k]=count;queue.Add(k);}}count++;
+    for(int at=0;at<queue.Count;at++){int j=queue[at];foreach(var p in new[]{roads[j].A,roads[j].B})foreach(int k in incident[RoundedNode(p)])if(component[k]<0){component[k]=count;queue.Add(k);}}count++;
    }
    if(count<2)return;
+   var targets=new EdgeGrid();
+   for(int i=0;i<roads.Count;i++)targets.Add(i,roads[i],roads[i].Width/2+.030001);
    ConstructionEdge source=null,target=null;Point from=default,to=default;double best=double.MaxValue;
-   for(int i=0;i<roads.Count;i++)foreach(var p in new[]{roads[i].A,roads[i].B})for(int j=0;j<roads.Count;j++){
-    if(component[i]==component[j]||preserveHeading&&incident[Key(p)].Count!=1)continue;var e=roads[j];var d=e.B-e.A;double length2=SiteFrame.Dot(d,d);if(length2<1e-8)continue;
+   for(int i=0;i<roads.Count;i++)foreach(var p in new[]{roads[i].A,roads[i].B}){
+    if(preserveHeading&&incident[RoundedNode(p)].Count!=1)continue;
+    var nearby=targets.At(p);if(nearby==null)continue;
+    foreach(int j in nearby){
+    if(component[i]==component[j])continue;var e=roads[j];var d=e.B-e.A;double length2=SiteFrame.Dot(d,d);if(length2<1e-8)continue;
     Point q;if(preserveHeading){if(!ForwardJoin(roads[i],p,e,e.Width/2+.03,out q))continue;}else{double t=SiteFrame.Dot(p-e.A,d)/length2;if(t<0||t>1)continue;q=e.A+d*t;}double gap=(q-p).Length;
     if(gap<=.000001||gap>e.Width/2+.03||gap>=best)continue;
     if(roads.Any(r=>ParallelRibbons(p,q,roads[i].Width,r.A,r.B,r.Width)))continue;
     source=roads[i];target=e;from=p;to=q;best=gap;
-   }
+   }}
    if(target==null)return;
    // Use exact shared endpoints on both halves, not independent projections.
    if((to-target.A).Length<.1)to=target.A;
@@ -181,21 +217,60 @@ public static class ConstructionGraph {
  }
  static List<ConstructionEdge> Incident(List<ConstructionEdge> edges,Point p)=>edges.Where(e=>(e.A-p).Length<.03||(e.B-p).Length<.03).ToList();
  static void MergeStraight(List<ConstructionEdge> edges){
-  bool changed=true;while(changed){changed=false;
-   foreach(var e in edges.ToArray()){
+  // Every merge reuses existing endpoints. Index them locally and keep the
+  // exact distance test across adjacent cells, including negative coordinates.
+  var buckets=new Dictionary<(int,int),HashSet<ConstructionEdge>>();
+  (int,int) Cell(Point p)=>((int)Math.Floor(p.X/.03),(int)Math.Floor(p.Y/.03));
+  void Index(ConstructionEdge e,Point p,bool add){
+   var key=Cell(p);
+   if(!buckets.TryGetValue(key,out var bucket))buckets[key]=bucket=new HashSet<ConstructionEdge>();
+   if(add)bucket.Add(e);else bucket.Remove(e);
+  }
+  foreach(var edge in edges){Index(edge,edge.A,true);Index(edge,edge.B,true);}
+  ConstructionEdge OnlyNeighbor(ConstructionEdge edge,Point p){
+   var (x,y)=Cell(p);ConstructionEdge found=null;
+   for(int i=x-1;i<=x+1;i++)for(int j=y-1;j<=y+1;j++){
+    if(!buckets.TryGetValue((i,j),out var bucket))continue;
+    foreach(var candidate in bucket){
+     if(candidate==edge||candidate==found||((candidate.A-p).Length>=.03&&(candidate.B-p).Length>=.03))continue;
+     if(found!=null)return null;
+     found=candidate;
+    }
+   }
+   return found;
+  }
+  // Preserve the first eligible edge in the original order. Only edges
+  // touching a changed endpoint can become newly eligible after a merge.
+  var original=edges.ToArray();
+  var indices=new Dictionary<ConstructionEdge,int>();
+  var pending=new SortedSet<int>();
+  for(int i=0;i<original.Length;i++){indices.Add(original[i],i);pending.Add(i);}
+  void Revisit(Point p){
+   var (x,y)=Cell(p);
+   for(int i=x-1;i<=x+1;i++)for(int j=y-1;j<=y+1;j++)
+    if(buckets.TryGetValue((i,j),out var bucket))foreach(var edge in bucket)pending.Add(indices[edge]);
+  }
+  while(pending.Count>0){
+    int index=pending.Min;pending.Remove(index);var e=original[index];
     foreach(var p in new[]{e.A,e.B}){
-     var incident=Incident(edges,p);if(incident.Count!=2)continue;var other=ReferenceEquals(incident[0],e)?incident[1]:incident[0];
+     var other=OnlyNeighbor(e,p);if(other==null)continue;
      // A role uses one native prefab. Court paving margins can make the
      // planning ribbon wider than its access ribbon, without a native change.
      if(e.Use!=other.Use)continue;
      var a=(e.A-p).Length<.03?e.B:e.A;var b=(other.A-p).Length<.03?other.B:other.A;var u=a-p;var v=b-p;
      if(SiteFrame.Dot(u,v)>=0||Math.Abs(Layout.Cross(u,v))>u.Length*v.Length*.0001)continue;
-     e.A=a;e.B=b;e.Width=Math.Max(e.Width,other.Width);edges.Remove(other);changed=true;break;
+     var oldA=e.A;var oldB=e.B;
+     Index(e,e.A,false);Index(e,e.B,false);Index(other,other.A,false);Index(other,other.B,false);
+     e.A=a;e.B=b;Index(e,a,true);Index(e,b,true);e.Width=Math.Max(e.Width,other.Width);pending.Remove(indices[other]);indices.Remove(other);
+     Revisit(oldA);Revisit(oldB);Revisit(other.A);Revisit(other.B);break;
     }
-    if(changed)break;
-   }
   }
+  edges.RemoveAll(edge=>!indices.ContainsKey(edge));
  }
+ static ((long,long),(long,long)) SpanKey(Point a,Point b){var start=RoundedNode(a);var end=RoundedNode(b);return start.CompareTo(end)<0?(start,end):(end,start);}
+ static readonly bool SignedZero=(-0.0).ToString()!=0.0.ToString();
+ static long NodeBits(double coordinate){double n=Math.Round(coordinate*100);return n==0&&!SignedZero?0:BitConverter.DoubleToInt64Bits(n);}
+ internal static (long,long) RoundedNode(Point p)=>(NodeBits(p.X),NodeBits(p.Y));
  static string Key(Point p)=>Math.Round(p.X*100)+","+Math.Round(p.Y*100);
  static void Cut(ConstructionEdge e,Point p,List<double> values){var d=e.B-e.A;double t=SiteFrame.Dot(p-e.A,d)/SiteFrame.Dot(d,d);if(t>0&&t<1)values.Add(t);}
  static List<Point> Simplify(IList<Point> p,double tolerance){

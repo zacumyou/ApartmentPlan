@@ -50,6 +50,11 @@ class Program {
   Console.WriteLine("PASS "+cases+" boundary transition checks");
  }
  static void Main(string[] args){if(args.Length>0&&args[0]=="--surface-parking"){SurfaceParkingTest();return;}
+ if(args.Length==1&&args[0]=="--entrance-cost"){LayoutSweep.Run(null);return;}
+ if(args.Length==2&&args[0]=="--mixed-limits"){LayoutSweep.MixedLimits(args[1]);return;}
+ if(args.Length==2&&args[0]=="--tower-gallery"){LayoutSweep.SlabGallery(args[1],tower:true);return;}
+ if(args.Length==2&&args[0]=="--slab-gallery"){LayoutSweep.SlabGallery(args[1]);return;}
+ if(args.Length==2&&args[0]=="--polygon-limits"){LayoutSweep.PolygonLimits(args[1]);return;}
  if(args.Length==2&&args[0]=="--layout-sweep"){LayoutSweep.Run(args[1]);return;}
  if(args.Length==1&&args[0]=="--workflow"){PlanSystem.VerifyWorkflow();LayoutWorkerTests.Run();return;}
  if(args.Length==1&&args[0]=="--boundary-transitions"){BoundaryTransitions();return;}
@@ -344,3 +349,10 @@ var box=new List<Point>{new Point(0,0),new Point(400,0),new Point(400,400),new P
   ReviewTests.Run();MasterPlanTests.Run();ParkingOptionsTests.Run();ParkingTrafficTests.Run();Codec.Test();SnapTests.Run();Console.WriteLine("Representative geometry checks passed; game runtime not tested.");
  }
 }
+
+
+
+
+
+
+

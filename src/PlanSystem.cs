@@ -210,15 +210,24 @@ public partial class PlanSystem:GameSystemBase {
   if(Mode=="replace"&&Draft!=null){PickBuilding(p);return;}
   if(Mode=="entrance"){
    if(Villa){entranceRedo.Clear();AddVillaConnection(p);return;}
-   var snapped=SiteFrame.Nearest(Boundary,p,out var inward);
+   RejectedGate=null;var snapped=SiteFrame.Nearest(Boundary,p,out var inward);
    if(Entrances.Any(e=>(e-snapped).Length<5)){Status="AP.ExistingEntrance";Revision++;return;}
    if((snapped-p).Length>16||Entrances.Count>=16){Status="AP.EntranceFit";Revision++;return;}
+   var proposed=Entrances.Concat(new[]{snapped}).ToList();var options=ConstructionOptions(false);
+   string gateError=null;
+   if(!Tower)gateError=ResidentialLayout.CheckEntranceFootprints(Boundary,proposed,options);
+   else if(options.TowerParking!=null){
+    try{TowerLayout.Generate(Boundary,proposed,Array.Empty<Asset>(),options,Zones,true);}
+    catch(PlanLimitException limit){SetLimit(limit.Status,limit.Current,limit.Maximum);Revision++;return;}
+    catch(ArgumentException e) when(e.Message=="AP.Tower.EntranceFit"){gateError=e.Message;}
+   }
+   if(gateError!=null){RejectedGate=snapped;Status=gateError;Revision++;return;}
    entranceRedo.Clear();Entrances.Add(snapped);Entrance=Entrances[0];Rebuild(()=>{Entrances.RemoveAt(Entrances.Count-1);Entrance=Entrances.Count>0?(Point?)Entrances[0]:null;});Mode="entrance";
   }
   
   Trace.Event("state.changed","mode="+Mode+" diagnostics="+Draft?.Diagnostics+" status="+Status+" shapes="+Preview.Count);Revision++;
  }
- internal void BoundaryEdited(){ClearInputHistory();if(Villa)DetectVillaConnections();Rebuild();Revision++;}
+ internal void BoundaryEdited(bool recalculatePreview){ClearInputHistory();if(Villa)DetectVillaConnections();if(recalculatePreview)CalculateLayout();else Rebuild();Revision++;}
  void RenderDraft(){treeKey=null;Preview.Clear();foreach(var item in Draft.Parcels){var r=item.CompactBounds??item;var a=Draft.World(new Point(r.X+r.W*.5,r.Y));var b=Draft.World(new Point(r.X+r.W*.5,r.Y+r.D));double displayWidth=r.W;if(item.PlacementOutline?.Length==4){var q=item.PlacementOutline;a=Draft.World((q[0]+q[1])*.5);b=Draft.World((q[2]+q[3])*.5);displayWidth=(q[1]-q[0]).Length;}Preview.Add(new PlanShape{A=new float3((float)a.X,Elevation,(float)a.Y),B=new float3((float)b.X,Elevation,(float)b.Y),Width=(float)displayWidth,Kind=item.Kind==1&&item.InvisibleRoad?10:item.Kind});}
    foreach(var road in Roads){var points=road.Sample();for(int i=1;i<points.Count;i++)Preview.Add(new PlanShape{A=new float3((float)points[i-1].X,Elevation,(float)points[i-1].Y),B=new float3((float)points[i].X,Elevation,(float)points[i].Y),Width=Mod.Options.RoadWidth,Kind=1});}
    int marks=0;foreach(var route in Draft.Routes.Where(r=>r.Use=="main")){
@@ -267,3 +276,48 @@ public partial class PlanSystem:GameSystemBase {
  internal string State()=>JsonConvert.SerializeObject(new{boundaryValid=Layout.Valid(Boundary),canReviewLayout=CanReviewLayout,canRedo=Mode=="boundary"?boundaryRedo.Count>0:Mode=="entrance"&&entranceRedo.Count>0,hasDraft=Draft!=null,canForceBuilding=CanForceBuilding,buildingEditor=Mode=="replace"&&ReplacementIndex>=0&&Draft!=null&&ReplacementIndex<Draft.Parcels.Count?new{x=ReplacementScreenX,y=ReplacementScreenY,current=Draft.Parcels[ReplacementIndex].AssetId}:null,recentNetworks=Mod.Options.RecentNetworksJson,autoCalculate=Mod.Options.AutoCalculate,layoutOutdated=LayoutOutdated,generateSurfaceParking=Mod.Options.GenerateSurfaceParking,parkingInOpenSpace=Mod.Options.ParkingInOpenSpace,compoundEditing=CompoundEditing,canForceDemolition=World.GetExistingSystemManaged<ToolSystem>()?.activeTool is ConstructionTool forceTool&&forceTool.CanForceDemolition,canDeleteAllPlans=CanDeleteAllPlans,migration=MigrationState(),fillRadius=FillRadius,canFill=CanFill,recentBuildingAssets=Mod.Options.RecentBuildingAssetsJson,entranceClose=Mode=="entrance"&&!Villa&&EntranceSpacing.HasClosePair(Entrances),tower=TowerState(),villaCentralRoad=Mod.Options.VillaCentralRoad,villaExistingRoadsOnly=Draft?.VillaExistingRoadsOnly??false,villaRoadDensity=Draft?.VillaRoadDensity??0,villaFollowBoundary=Mod.Options.VillaFollowBoundary,planMode=Mod.Options.PlanMode,villaMesh=Mod.Options.VillaMesh,villaGap=Mod.Options.VillaGap,villaReduction=Mod.Options.VillaReduction,villaMainSpacing=Mod.Options.VillaMainSpacing,villaRows=Mod.Options.VillaRows,villaMaxBuildings=Mod.Options.VillaMaxBuildings,villaBoundary=Mod.Options.VillaBoundary,villaSetback=Mod.Options.VillaSetback,villaConnectionDistance=Mod.Options.VillaConnectionDistance,villaConnections=VillaConnections.Select(c=>new{c.Side,c.Junction,c.Disabled}),limit=LimitInfo,grassSurfaces=Mod.Options.GrassSurfaces,nativeProgress=NativeBusy?World.GetExistingSystemManaged<ConstructionTool>()?.Progress:null,nativeBusy=NativeBusy||replacementPlan>=0&&(demolitionCountdown>0||replacementPreviewFrames>0),buildingPattern=Mod.Options.BuildingPattern,mainTJunctions=Mod.Options.AllowMainTJunctions,layoutReasons=LayoutPending?null:layoutReasons,statusError=StatusError,diagnosticCopyState,diagnosticShareStatus,diagnosticShareBusy=diagnosticShareDialog||diagnosticShareTask!=null,catalogLoading=CatalogLoading,catalogCount=catalogProcessed,lotTiles=Villa?Mod.Options.VillaTileLots:Mod.Options.TileBuildingLots,surfaceRadius=Mod.Options.SurfaceCornerRadius,landscape=LandscapeState(),canDelete=CanDeleteCurrent,deleteReason=DeletionReason(CurrentDeletionTarget),mainSetback=Mod.Options.MainParkingSetback,boundaryMargin=Mod.Options.BoundaryGreenMargin,population=EstimatedPopulation,householdAverage=HouseholdAverage,calculating=LayoutPending,roadCurved=RoadCurved,roadPoints=RoadPoints.Count,pendingRoads=RoadDraft.Roads.Count,roads=Roads.Count,nativeDemolition=World.GetExistingSystemManaged<ConstructionTool>()?.Demolishing??false,inspector=StoredSummary(SelectedStored),editingPlan=EditingPlan,curveRadius=Mod.Options.MainRoadCurveRadius,curveLength=Mod.Options.MainRoadCurveLengthPercent,lineOverlap=Mod.Options.ParkingLineOverlap,parkingPitch=ParkingPitch,decalGap=Mod.Options.ParkingDecalGap,parkingGreen=Mod.Options.ParkingGreenIslands,parkingGreenWidth=Mod.Options.ParkingIslandWidth,networks=Networks,mainNetwork=Mod.Options.MainNetwork,aisleNetwork=Villa?"Alley":Mod.Options.AisleNetwork,walkNetwork=Mod.Options.WalkNetwork,nativeActive=World.GetExistingSystemManaged<ToolSystem>()?.activeTool is ConstructionTool,nativeValid=World.GetExistingSystemManaged<ConstructionTool>()?.Valid??false,nativeReport=HasCurrentNativeReport?World.GetExistingSystemManaged<ConstructionTool>()?.Report??"":"",nativeMetrics=HasCurrentNativeReport?World.GetExistingSystemManaged<ConstructionTool>()?.Metrics:null,nativeNotice=HasCurrentNativeReport?World.GetExistingSystemManaged<ConstructionTool>()?.Notice??"":"",nativeCommitted=NativeCommitted,nativeAuditAvailable=NativeAuditAvailable,cornerMode=Mod.Options.MainRoadCornerMode,requireBuildingRoad=true,parkingAccessFailures=Draft?.ParkingAccessFailures??0,requireFrontParking=Mod.Options.RequireFrontParking,open=Open,mode=Mode,status=LayoutPending?"AP.Calculating":Status,points=Boundary.Count,zonePoints=ZonePoints.Count,zones=Zones.Count,entrances=Entrances.Count,replacement=ReplacementIndex>=0&&Draft!=null?Draft.Parcels[ReplacementIndex].AssetId:null,entrance=EntranceLength,selected=Selected.ToArray(),snaps=new[]{Mod.Options.SnapRoads,Mod.Options.SnapBuildings,Mod.Options.SnapLots,Mod.Options.SnapGrid,Mod.Options.SnapDirections,Mod.Options.SnapGuides,Mod.Options.SnapClose},area=Draft?.Area??(Boundary.Count>=3?System.Math.Abs(Layout.SignedArea(Boundary)):0),far=Draft?.Far??0,homes=Draft?.Homes??0,shortfall=Draft?.Shortfall,counts=Draft?.Parcels.GroupBy(p=>p.Kind==1&&p.InvisibleRoad?10:p.Kind).ToDictionary(g=>g.Key,g=>g.Count()),accessFailures=Draft?.RequiredAccessFailures??0,areas=Draft?.Parcels.GroupBy(p=>p.Kind==1&&p.InvisibleRoad?10:p.Kind).ToDictionary(g=>g.Key,g=>g.Sum(p=>p.Area)),suggestCleanup=Draft!=null&&Saved.Where(p=>p.Info.Number!=EditingPlan).Sum(p=>(long)p.Shapes.Count)+Preview.Count+Boundary.Count>PlanLimits.TotalShapes,saved=Saved.Where(p=>!p.Hidden).Select(StoredSummary),colors=Mod.Options?.Colors,canSave=!CompoundApplying&&catalogReady&&!CatalogLoading&&RoadPoints.Count==0&&!LayoutPending&&!LayoutOutdated&&Status!="AP.NetworkUnavailable"&&Draft?.Parcels.Any(p=>p.Kind==0)==true&&Draft.RequiredAccessFailures==0});
 }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

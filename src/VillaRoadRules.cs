@@ -44,15 +44,15 @@ public static class VillaRoadRules {
   if(best==null)return false;foreach(var e in best){e.Use="main";e.Width=width;}return true;
  }
  public static List<List<Point>> EmptyBlocks(Plan plan,IList<ConstructionEdge> edges){
-  var adjacent=new Dictionary<string,List<Point>>();var positions=new Dictionary<string,Point>();
-  foreach(var e in edges)foreach(var pair in new[]{Tuple.Create(e.A,e.B),Tuple.Create(e.B,e.A)}){var k=Key(pair.Item1);positions[k]=pair.Item1;if(!adjacent.ContainsKey(k))adjacent[k]=new List<Point>();if(!adjacent[k].Any(q=>Key(q)==Key(pair.Item2)))adjacent[k].Add(pair.Item2);}
+  var adjacent=new Dictionary<(long,long),List<Point>>();var positions=new Dictionary<(long,long),Point>();
+  foreach(var e in edges)foreach(var pair in new[]{Tuple.Create(e.A,e.B),Tuple.Create(e.B,e.A)}){var k=ConstructionGraph.RoundedNode(pair.Item1);positions[k]=pair.Item1;if(!adjacent.ContainsKey(k))adjacent[k]=new List<Point>();if(!adjacent[k].Any(q=>ConstructionGraph.RoundedNode(q)==ConstructionGraph.RoundedNode(pair.Item2)))adjacent[k].Add(pair.Item2);}
   foreach(var k in adjacent.Keys.ToArray()){var p=positions[k];adjacent[k]=adjacent[k].OrderBy(q=>Math.Atan2(q.Y-p.Y,q.X-p.X)).ToList();}
-  var seen=new HashSet<string>();var result=new List<List<Point>>();var houses=plan.Parcels.Where(r=>r.Kind==0).Select(r=>plan.World(new Point(r.X+r.W/2,r.Y+r.D/2))).ToArray();
+  var seen=new HashSet<((long,long),(long,long))>();var result=new List<List<Point>>();var houses=plan.Parcels.Where(r=>r.Kind==0).Select(r=>plan.World(new Point(r.X+r.W/2,r.Y+r.D/2))).ToArray();
   foreach(var edge in edges)foreach(var pair in new[]{Tuple.Create(edge.A,edge.B),Tuple.Create(edge.B,edge.A)}){
-   var a=pair.Item1;var b=pair.Item2;var face=new List<Point>();string start=Key(a)+"/"+Key(b);bool closed=false;
+   var a=pair.Item1;var b=pair.Item2;var face=new List<Point>();var start=(ConstructionGraph.RoundedNode(a),ConstructionGraph.RoundedNode(b));bool closed=false;
    for(int step=0;step<edges.Count*2+2;step++){
-    string directed=Key(a)+"/"+Key(b);if(!seen.Add(directed)){closed=directed==start;break;}face.Add(a);
-    var neighbours=adjacent[Key(b)];int reverse=neighbours.FindIndex(q=>Key(q)==Key(a));if(reverse<0)break;var next=neighbours[(reverse+neighbours.Count-1)%neighbours.Count];a=b;b=next;
+    var directed=(ConstructionGraph.RoundedNode(a),ConstructionGraph.RoundedNode(b));if(!seen.Add(directed)){closed=directed==start;break;}face.Add(a);
+    var neighbours=adjacent[ConstructionGraph.RoundedNode(b)];int reverse=neighbours.FindIndex(q=>ConstructionGraph.RoundedNode(q)==ConstructionGraph.RoundedNode(a));if(reverse<0)break;var next=neighbours[(reverse+neighbours.Count-1)%neighbours.Count];a=b;b=next;
    }
    if(closed&&face.Count>=3&&Layout.SignedArea(face)>1&&!houses.Any(h=>Layout.Inside(h,face)))result.Add(face);
   }return result;

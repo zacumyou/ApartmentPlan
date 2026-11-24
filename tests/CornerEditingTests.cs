@@ -11,6 +11,11 @@ static class CornerEditingTests {
   try{Layout.Generate(wide,new[]{new Point(40,0),new Point(48,0)},Array.Empty<Asset>(),new LayoutOptions{Road=8},null,null);throw new Exception("overlapping entrance accepted");}
   catch(ArgumentException e){var d=e.Data["entranceEvidence"] as System.Collections.Generic.Dictionary<string,int>;Check(e.Message=="EntranceSpacing"&&d!=null&&d["reason"]==61&&d["connected"]==2,"spacing rejection differs from footprint fit without moving entrances");}
 
+  var settings=new LayoutOptions{Road=8};
+  Check(ResidentialLayout.CheckEntranceFootprints(wide,new[]{new Point(40,0),new Point(48,0)},settings)=="AP.EntranceFit"&&ResidentialLayout.CheckEntranceFootprints(wide,new[]{new Point(40,0),new Point(80,0)},settings)==null,"move only the invalid slab entrance and retry");
+  var tower=new LayoutOptions{Tower=true,TowerParking=new Asset{Id="garage",Width=16,Depth=24}};
+  try{TowerLayout.Generate(wide,new[]{new Point(2,0)},Array.Empty<Asset>(),tower,null,true);throw new Exception("tower corner accepted");}catch(ArgumentException e){Check(e.Message=="AP.Tower.EntranceFit","tower gate checks the turnaround envelope");}
+  TowerLayout.Generate(wide,new[]{new Point(50,0)},Array.Empty<Asset>(),tower,null,true);
   var box=new[]{new Point(0,0),new Point(32,0),new Point(32,60),new Point(0,60)};
   var entries=new[]{new Point(0,15),new Point(32,45)};
   var assets=new[]{new Asset{Id="A",Width=16,Depth=8,Height=20,Homes=10}};

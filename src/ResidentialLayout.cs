@@ -10,6 +10,7 @@ internal sealed partial class ResidentialLayout {
  const int Outside=-1,Green=4,Paved=8,Fixed=10,Reserve=11,CourtGreen=12;
  readonly Plan plan;readonly LayoutOptions o;readonly List<Point> poly;
  readonly int nx,ny;readonly double cell,x0,y0;readonly int[,] map;
+ readonly int[,] boundaryOrOutside;
  readonly List<Parcel> exact=new List<Parcel>();
  readonly List<Asset> assets;readonly Parcel entry;
  double floors;int spaces,assetIndex,modules,supplementalRoutes;
@@ -29,9 +30,32 @@ internal sealed partial class ResidentialLayout {
   cell=Math.Max(1,Math.Ceiling(Math.Max(w,h)/400));
   x0=Math.Floor(poly.Min(v=>v.X)/cell)*cell-cell;y0=Math.Floor(poly.Min(v=>v.Y)/cell)*cell-cell;
   nx=(int)Math.Ceiling(w/cell)+4;ny=(int)Math.Ceiling(h/cell)+4;map=new int[nx,ny];
-  for(int y=0;y<ny;y++)for(int x=0;x<nx;x++)map[x,y]=Layout.Contains(Rect(x,y,1,1),poly)?Green:Outside;
+  // Cells away from the boundary form uninterrupted inside/outside runs.
+  // Keep the exact concave-polygon test on every possibly touched cell.
+  var boundaryCells=new bool[nx,ny];
+  for(int i=0;i<poly.Count;i++){
+   var a=poly[i];var b=poly[(i+1)%poly.Count];const double pad=.001;
+   int firstX=Math.Max(0,X(Math.Min(a.X,b.X)-pad)),lastX=Math.Min(nx-1,X(Math.Max(a.X,b.X)+pad));
+   int firstY=Math.Max(0,Y(Math.Min(a.Y,b.Y)-pad)),lastY=Math.Min(ny-1,Y(Math.Max(a.Y,b.Y)+pad));
+   for(int y=firstY;y<=lastY;y++)for(int x=firstX;x<=lastX;x++)boundaryCells[x,y]=true;
+  }
+  boundaryOrOutside=new int[nx+1,ny+1];
+  for(int y=0;y<ny;y++)for(int x=0;x<nx;x++){
+   if(boundaryCells[x,y])map[x,y]=Layout.Contains(Rect(x,y,1,1),poly)?Green:Outside;
+   else if(x>0&&!boundaryCells[x-1,y])map[x,y]=map[x-1,y];
+   else map[x,y]=Layout.Inside(new Point(x0+(x+.5)*cell,y0+(y+.5)*cell),poly)?Green:Outside;
+   boundaryOrOutside[x+1,y+1]=boundaryOrOutside[x,y+1]+boundaryOrOutside[x+1,y]-boundaryOrOutside[x,y]+(boundaryCells[x,y]||map[x,y]==Outside?1:0);
+  }
   reserved=new bool[nx,ny];entranceWalkBuffer=new bool[nx,ny];ProtectEdge();ManualZones(zones);entry=EntranceParcel(p.Origin);
 
+ }
+ // A rectangle covered entirely by certified interior cells is inside.
+ // Border-straddling and out-of-grid rectangles retain the exact test.
+ bool SiteContains(Parcel r){
+  int a=X(r.X),b=Y(r.Y),c=X(r.X+r.W)+1,d=Y(r.Y+r.D)+1;
+  if(a>=0&&b>=0&&c<=nx&&d<=ny&&c>a&&d>b&&
+     boundaryOrOutside[c,d]-boundaryOrOutside[a,d]-boundaryOrOutside[c,b]+boundaryOrOutside[a,b]==0)return true;
+  return Layout.Contains(r,poly);
  }
  double Snap(double value)=>Math.Ceiling(value/cell)*cell;
  Parcel Rect(int x,int y,int w,int h,int kind=4)=>new Parcel{X=x0+x*cell,Y=y0+y*cell,W=w*cell,D=h*cell,Kind=kind};
@@ -122,7 +146,7 @@ internal sealed partial class ResidentialLayout {
   if(block.SupplementalParking){
    if(supplementalRoutes++>=256)return false;
    Func<int,int,bool> join=(x,y)=>map[x,y]==1&&(x<a||y<b||x>=c||y>=d);
-   var access=FindRoute(block.Gate,join,o.SupplementalAccessWidth,false,block.MaxConnection);
+   var access=FindRoute(block.Gate,join,o.SupplementalAccessWidth,false,block.MaxConnection,true);
    if(!AccessFits(block,access,o.SupplementalAccessWidth)||access.Count*cell>block.MaxConnection)return false;
    DrawRoute(access,o.SupplementalAccessWidth,"aisleWide");return true;
   }
@@ -130,10 +154,10 @@ internal sealed partial class ResidentialLayout {
   Func<int,int,bool> target=(x,y)=>map[x,y]==1&&(x<a||y<b||x>=c||y>=d);
   // Reserve the wider approach before subsequent courts/parking occupy it.
   if(o.WideParkingAisle>width){
-   var wide=FindRoute(block.Gate,target,o.WideParkingAisle,false,block.MaxConnection);
+   var wide=FindRoute(block.Gate,target,o.WideParkingAisle,false,block.MaxConnection,true);
    if(AccessFits(block,wide,o.WideParkingAisle)&&wide.Count*cell<=block.MaxConnection){DrawRoute(wide,o.WideParkingAisle,"aisleWide");return true;}
   }
-  var path=FindRoute(block.Gate,target,width,false,block.MaxConnection);
+  var path=FindRoute(block.Gate,target,width,false,block.MaxConnection,true);
   if(!AccessFits(block,path,width)||path.Count*cell>block.MaxConnection)return false;
   DrawRoute(path,width,"access");return true;
  
@@ -165,7 +189,7 @@ internal sealed partial class ResidentialLayout {
  }
  bool Fits(Block block){
   using(var timingScope=LayoutFunctionTiming.Start(o.FunctionTiming,"Fits")){
-  if(!Layout.Contains(block.Bounds,poly))return false;
+  if(!SiteContains(block.Bounds))return false;
   if(block.Pieces.Any(r=>(r.Kind==0||r.Kind==2)&&!ClearOfMain(r)))return false;
   Bounds(block.Bounds,out int a,out int b,out int c,out int d);
   for(int y=b;y<d;y++)for(int x=a;x<c;x++){
@@ -205,7 +229,7 @@ internal sealed partial class ResidentialLayout {
   if(Full)return false;
   foreach(var asset in AssetChoice.Shuffle(assets,assetRandom)){var block=Template(x,y,asset,single,rotated,aligned,compact);
    if(!Fits(block))continue;
-   if(edgeOnly){var expanded=new Parcel{X=block.Bounds.X-8,Y=block.Bounds.Y-8,W=block.Bounds.W+16,D=block.Bounds.D+16};if(Layout.Contains(expanded,poly))continue;}
+   if(edgeOnly){var expanded=new Parcel{X=block.Bounds.X-8,Y=block.Bounds.Y-8,W=block.Bounds.W+16,D=block.Bounds.D+16};if(SiteContains(expanded))continue;}
    if(!Place(block))continue;return true;
   }
   return false;
@@ -265,7 +289,7 @@ internal sealed partial class ResidentialLayout {
  }
  bool EdgeSpace(Block block){
   if(!Fits(block))return false;
-  var r=block.Bounds;return !Layout.Contains(new Parcel{X=r.X-12,Y=r.Y-12,W=r.W+24,D=r.D+24},poly);
+  var r=block.Bounds;return !SiteContains(new Parcel{X=r.X-12,Y=r.Y-12,W=r.W+24,D=r.D+24});
  }
  void Infill(){
   if(!o.EdgeInfill||assets.Count==0)return;
@@ -355,14 +379,29 @@ internal sealed partial class ResidentialLayout {
  }
  internal static Plan Generate(IList<Point> boundary,Point entrance,IList<Asset> assets,LayoutOptions o,IList<Parcel> ramps)=>Generate(boundary,new[]{entrance},assets,o,ramps,null);
  internal static Plan Generate(IList<Point> boundary,IList<Point> entrances,IList<Asset> assets,LayoutOptions o,IList<Parcel> ramps,IList<ManualZone> zones,IList<ManualRoad> roads=null){
+  var first=GenerateCandidate(boundary,entrances,assets,o,ramps,zones,roads,false);
+  if(assets.Count<2)return first;
+  var footprints=assets.Where(a=>a.Id!=null&&a.Width>0&&a.Depth>0&&a.Height>=0).GroupBy(a=>a.Id).ToDictionary(g=>g.Key,g=>(g.First().Width,g.First().Depth));
+  int Coverage(Plan candidate)=>candidate.Parcels.Where(q=>q.Kind==0&&q.AssetId!=null&&footprints.ContainsKey(q.AssetId)).Select(q=>footprints[q.AssetId]).Distinct().Count();
+  int sizes=footprints.Values.Distinct().Count();
+  if(sizes<2||Coverage(first)>=Math.Min(sizes,o.MaxBuildings))return first;
+  try{
+   var alternative=GenerateCandidate(boundary,entrances,assets,o,ramps,zones,roads,true);
+   return Coverage(alternative)>Coverage(first)&&alternative.RequiredAccessFailures<=first.RequiredAccessFailures&&alternative.ParkingAccessFailures<=first.ParkingAccessFailures?alternative:first;
+  }catch(ArgumentException){return first;}
+ }
+ bool reserveSizes;
+ static Plan GenerateCandidate(IList<Point> boundary,IList<Point> entrances,IList<Asset> assets,LayoutOptions o,IList<Parcel> ramps,IList<ManualZone> zones,IList<ManualRoad> roads,bool reserveSizes){
   if(!Layout.Valid(boundary)||entrances==null||entrances.Count==0||entrances.Count>16)throw new ArgumentException("Boundary");
-  var p=Layout.Frame(boundary,entrances[0]);var timer=System.Diagnostics.Stopwatch.StartNew();var solver=new ResidentialLayout(p,o,assets,zones);
+  var p=Layout.Frame(boundary,entrances[0]);var timer=System.Diagnostics.Stopwatch.StartNew();var solver=new ResidentialLayout(p,o,assets,zones){reserveSizes=reserveSizes};
   void Stage(string name){o.Cancellation.ThrowIfCancellationRequested();p.LayoutTimings[name]=timer.ElapsedMilliseconds;o.Timing?.Invoke(name,timer.ElapsedMilliseconds);timer.Restart();}
   Stage("grid");
-  if(ramps!=null)foreach(var r in ramps){if(!Layout.Contains(r,solver.poly)||!solver.Free(r))throw new ArgumentException("RampFit");solver.Paint(r,Fixed);solver.exact.Add(r);}
+  if(ramps!=null)foreach(var r in ramps){if(!solver.SiteContains(r)||!solver.Free(r))throw new ArgumentException("RampFit");solver.Paint(r,Fixed);solver.exact.Add(r);}
   for(int i=1;i<entrances.Count;i++)solver.EntranceParcel(entrances[i]);
   solver.MainRoads();Stage("mainSkeleton");solver.AddManualRoads(roads);Stage("manualRoads");solver.ProtectMainRoad();Stage("mainRoad");solver.ParkingCourtHousing();Stage("housing");if(o.GenerateSurfaceParking)solver.AddParkingAisles();Stage("parkingAisles");if(o.GenerateSurfaceParking)solver.SharedFrontageParking();Stage("sharedParking");if(o.GenerateSurfaceParking)solver.JoinParkingGaps();Stage("parkingGaps");if(o.GenerateSurfaceParking)solver.CloseParkingLoops();Stage("parkingLoops");solver.RepairFrontageConnections();Stage("frontageRepair");solver.PreferWideAccess();Stage("wideAccess");if(o.GenerateSurfaceParking)solver.ReclaimWideParking();Stage("reclaimParking");if(o.GenerateSurfaceParking)solver.FillPavedParkingCourts();Stage("pavedParking");if(o.GenerateSurfaceParking)solver.FillOpenSpaceParking();Stage("openParking");Stage("parking");if(o.PedestrianNetwork){solver.OpenSpaceWalks();Stage("openWalks");solver.ConnectWalks();Stage("walkConnections");solver.RoundWalkCorners();Stage("walkCorners");}Stage("walks");solver.Finish();Stage("geometryFinish");ParkingTraffic.Validate(p,o);Stage("finish");
   p.Diagnostics="entrances="+entrances.Count+" routes="+p.Routes.Count+" unreachable="+p.UnreachableAccess.Count+" parkingAccessFailures="+p.ParkingAccessFailures;return p;
  }
 }
 }
+
+

@@ -6,7 +6,27 @@ public static class VillaGeometry {
  public static Point Unit(Point p)=>p.Length>.00001?p*(1/p.Length):new Point();
  public static Point Nearest(Point p,Point a,Point b){var d=b-a;double ll=SiteFrame.Dot(d,d);return ll<1e-8?a:a+d*Math.Max(0,Math.Min(1,SiteFrame.Dot(p-a,d)/ll));}
  public static Point[] Box(Point c,Point forward,double w,double d){var side=new Point(forward.Y,-forward.X);return new[]{c-side*(w/2)-forward*(d/2),c+side*(w/2)-forward*(d/2),c+side*(w/2)+forward*(d/2),c-side*(w/2)+forward*(d/2)};}
- public static bool Overlap(IList<Point> a,IList<Point> b){foreach(var poly in new[]{a,b})for(int i=0;i<poly.Count;i++){var edge=poly[(i+1)%poly.Count]-poly[i];var n=new Point(-edge.Y,edge.X);double amin=a.Min(p=>SiteFrame.Dot(p,n)),amax=a.Max(p=>SiteFrame.Dot(p,n)),bmin=b.Min(p=>SiteFrame.Dot(p,n)),bmax=b.Max(p=>SiteFrame.Dot(p,n));if(amax<=bmin+.00001||bmax<=amin+.00001)return false;}return true;}
+ // Project each vertex once per separating axis. This inner loop also runs
+ // for rejected building candidates, so keep it free of iterator allocations.
+ static void Project(IList<Point> vertices,Point axis,out double min,out double max){
+  min=max=SiteFrame.Dot(vertices[0],axis);
+  for(int i=1;i<vertices.Count;i++){
+   double value=SiteFrame.Dot(vertices[i],axis);
+   min=Math.Min(min,value);max=Math.Max(max,value);
+  }
+ }
+ public static bool Overlap(IList<Point> a,IList<Point> b){
+  for(int side=0;side<2;side++){
+   var poly=side==0?a:b;
+   for(int i=0;i<poly.Count;i++){
+    var edge=poly[(i+1)%poly.Count]-poly[i];var axis=new Point(-edge.Y,edge.X);
+    Project(a,axis,out double amin,out double amax);
+    Project(b,axis,out double bmin,out double bmax);
+    if(amax<=bmin+.00001||bmax<=amin+.00001)return false;
+   }
+  }
+  return true;
+ }
  public static bool Inside(IList<Point> shape,IList<Point> poly){
   if(shape.Any(p=>!Layout.Inside(p,poly)))return false;
   for(int i=0;i<shape.Count;i++){var a=shape[i];var b=shape[(i+1)%shape.Count];if(!Layout.Inside((a+b)*.5,poly))return false;

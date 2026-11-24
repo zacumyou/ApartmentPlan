@@ -152,13 +152,18 @@ public static class Layout {
  public static bool Valid(IList<Point> p){if(p.Count<3||p.Count>128||p.Any(v=>double.IsNaN(v.X)||double.IsNaN(v.Y)||double.IsInfinity(v.X)||double.IsInfinity(v.Y)))return false;
   for(int i=0;i<p.Count;i++){if((p[i]-p[(i+1)%p.Count]).Length<1)return false;for(int j=i+1;j<p.Count;j++){if(j==i+1||i==0&&j==p.Count-1)continue;if(Intersects(p[i],p[(i+1)%p.Count],p[j],p[(j+1)%p.Count]))return false;}}return Math.Abs(SignedArea(p))>=100;
  }
- public static bool Inside(Point p,IList<Point> poly){bool inside=false;for(int i=0,j=poly.Count-1;i<poly.Count;j=i++){var a=poly[j];var b=poly[i];if(On(p,a,b))return true;if((a.Y>p.Y)!=(b.Y>p.Y)&&p.X<(b.X-a.X)*(p.Y-a.Y)/(b.Y-a.Y)+a.X)inside=!inside;}return inside;}
+ public static bool Inside(Point p,IList<Point> poly){bool inside=false;for(int i=0,j=poly.Count-1;i<poly.Count;j=i++){var a=poly[j];var b=poly[i];if(p.Y<Math.Min(a.Y,b.Y)-E||p.Y>Math.Max(a.Y,b.Y)+E)continue;if(On(p,a,b))return true;if((a.Y>p.Y)!=(b.Y>p.Y)&&p.X<(b.X-a.X)*(p.Y-a.Y)/(b.Y-a.Y)+a.X)inside=!inside;}return inside;}
  public static bool Contains(Parcel r,IList<Point> p){var c=r.Corners;if(c.Any(v=>!Inside(v,p)))return false;
   // Reject a concave boundary crossing the rectangle even when all corners are inside.
-  for(int i=0;i<p.Count;i++){var a=p[i];var b=p[(i+1)%p.Count];if(a.X>r.X+E&&a.X<r.X+r.W-E&&a.Y>r.Y+E&&a.Y<r.Y+r.D-E)return false;for(int k=0;k<4;k++)if(Cross(c[(k+1)%4]-c[k],a-c[k])*Cross(c[(k+1)%4]-c[k],b-c[k])<-E&&Cross(b-a,c[k]-a)*Cross(b-a,c[(k+1)%4]-a)<-E)return false;}return true;
+  for(int i=0;i<p.Count;i++){var a=p[i];var b=p[(i+1)%p.Count];if(Math.Max(a.X,b.X)<r.X||Math.Min(a.X,b.X)>r.X+r.W||Math.Max(a.Y,b.Y)<r.Y||Math.Min(a.Y,b.Y)>r.Y+r.D)continue;if(a.X>r.X+E&&a.X<r.X+r.W-E&&a.Y>r.Y+E&&a.Y<r.Y+r.D-E)return false;for(int k=0;k<4;k++)if(Cross(c[(k+1)%4]-c[k],a-c[k])*Cross(c[(k+1)%4]-c[k],b-c[k])<-E&&Cross(b-a,c[k]-a)*Cross(b-a,c[(k+1)%4]-a)<-E)return false;}return true;
  }
  public static bool Overlap(Parcel a,Parcel b,double gap=0)=>a.X<b.X+b.W+gap-E&&a.X+a.W+gap>b.X+E&&a.Y<b.Y+b.D+gap-E&&a.Y+a.D+gap>b.Y+E;
  public static Plan Frame(IList<Point> boundary,Point entrance)=>SiteFrame.Create(boundary,entrance);
+ public static bool HasHousingAsset(IEnumerable<Asset> assets,bool tower,string parkingId)=>assets.Any(a=>a.Width>0&&a.Depth>0&&(!tower||a.Id!=parkingId));
+ public static Plan GenerateHousing(IList<Point> boundary,IList<Point> entrances,IList<Asset> assets,LayoutOptions o,IList<Parcel> ramps,IList<ManualZone> zones,IList<ManualRoad> roads=null){
+  if(!o.Villa&&!HasHousingAsset(assets,o.Tower,o.TowerParking?.Id))throw new ArgumentException("AP.SelectAssets");
+  return Generate(boundary,entrances,assets,o,ramps,zones,roads);
+ }
  public static Plan Generate(IList<Point> boundary,IList<Point> entrances,IList<Asset> assets,LayoutOptions o,IList<Parcel> ramps,IList<ManualZone> zones,IList<ManualRoad> roads=null){
   var observation=new PlanningObservation(o,boundary.Count,entrances.Count,assets,zones?.Count??0,roads?.Count??0);o.Observation=observation;
   try{var p=o.Tower?TowerLayout.Generate(boundary,entrances,assets,o,zones):o.Villa?VillaLayout.Generate(boundary,entrances,assets,o,zones):ResidentialLayout.Generate(boundary,entrances,assets,o,ramps,zones,roads);observation.Result(p);p.Planning=observation.Finish(1);return p;}

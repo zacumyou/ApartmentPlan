@@ -5,7 +5,7 @@ using System.Collections.Generic;
 using ApartmentPlan;
 using Newtonsoft.Json;
 
-static class LayoutSweep {
+static partial class LayoutSweep {
  static IEnumerable<(Point A,Point B)> Segments(ConstructionCourse c){
   int n=c.Curved?32:1;
   for(int i=0;i<n;i++)yield return(c.Curve.At((double)i/n),c.Curve.At((i+1d)/n));
@@ -39,7 +39,7 @@ static class LayoutSweep {
   return null;
  }
  public static void Run(string folder){
-  Directory.CreateDirectory(folder);int bad=0,generated=0,rejected=0;
+  if(folder!=null)Directory.CreateDirectory(folder);int bad=0,generated=0,rejected=0;
   foreach(string mode in new[]{"villa","slab","tower"})foreach(int shape in new[]{0,1,2})foreach(int config in Enumerable.Range(0,8)){
    var id=mode+"-"+shape+"-"+config;if(Environment.GetEnvironmentVariable("AP_SWEEP_CASE") is string only && id!=only)continue;
    var boundary=new List<Point>{new Point(0,0),new Point(240,0),new Point(240,180)};
@@ -52,6 +52,24 @@ static class LayoutSweep {
    o.VillaConnections=gates.Select((g,i)=>new VillaConnection{Boundary=g,Road=g+(i==0?new Point(0,-8):new Point(8,0)),Tangent=i==0?new Point(1,0):new Point(0,1),Manual=true}).ToList();
    var assets=new[]{new Asset{Id=mode=="villa"?"CSKR test":"apartment",Width=mode=="villa"?16:32,Depth=mode=="villa"?16:24,Homes=40,Height=30}};
    
+   if(folder==null){
+    if(shape!=0||config!=1)continue;
+    using(var proc=System.Diagnostics.Process.GetCurrentProcess()){
+     for(int trial=0;trial<6;trial++){
+      if(trial==5&&Environment.GetEnvironmentVariable("AP_PROFILE_COST")=="1")o.FunctionTiming=new LayoutFunctionTiming();
+      var cpu=proc.TotalProcessorTime;long bytes=GC.GetAllocatedBytesForCurrentThread();
+      var timer=System.Diagnostics.Stopwatch.StartNew();
+      var layout=Layout.Generate(boundary,gates,assets,o,null,null);
+      timer.Stop();bytes=GC.GetAllocatedBytesForCurrentThread()-bytes;
+      var cpuMs=(proc.TotalProcessorTime-cpu).TotalMilliseconds;
+      o.FunctionTiming?.Flush(Console.WriteLine);
+      if(trial==5)Console.WriteLine("stages "+mode+" "+JsonConvert.SerializeObject(layout.LayoutTimings));
+      var hash=Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(JsonConvert.SerializeObject(new{layout.Parcels,layout.Routes,layout.Courts,layout.Homes,layout.RequiredAccessFailures}))));
+      Console.WriteLine($"{mode} {trial} {timer.Elapsed.TotalMilliseconds:F2} {cpuMs:F2} {bytes} {hash}");
+     }
+    }
+    continue;
+   }
    Plan plan;try{plan=Layout.Generate(boundary,gates,assets,o,null,null);}catch(ArgumentException e) when(mode=="tower"&&(e.Message=="AP.Tower.RoutingRetryFit"||e.Message=="AP.Tower.ConnectionFit")){Console.WriteLine(id+" rejected "+e.Message);rejected++;if(config!=0)bad++;continue;}
    generated++;var roads=ConstructionCurves.Create(plan).Where(c=>c.Use!="pedestrian").ToArray();
    var conflicts=new List<string>();
@@ -62,6 +80,7 @@ static class LayoutSweep {
    File.WriteAllText(Path.Combine(folder,id+".json"),JsonConvert.SerializeObject(new{boundary,gates,roads,conflicts,houses=houses.Select(p=>(p.PlacementOutline??p.Corners).Select(plan.World))}));
    if(missing>0||conflicts.Count>0||plan.RequiredAccessFailures>0||houses.Length==0)bad++;
   }
+  if(folder==null)return;
   Console.WriteLine($"Generated {generated}, rejected {rejected}, failed checks {bad}");
   if(bad>0)throw new Exception(bad+" failing layouts");
  }

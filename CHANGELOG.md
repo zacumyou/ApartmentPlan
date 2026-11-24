@@ -1,3 +1,19 @@
+# 0.1.176
+
+## 한국어
+
+- 대형 부지의 배치 미리보기를 더 빨리 계산합니다. 420 × 300m 판상형 부지에 크기가 다른 건물 5종을 선택한 비교 시험에서, 입구가 1개일 때 28.6초에서 1.4초로, 2개일 때 약 49~50초에서 2.0~2.6초로 줄었습니다. 직전 공개 버전(0.1.166)과 게임 밖에서 비교한 결과이며, 실제 대기 시간은 부지와 PC에 따라 달라집니다.
+- 크기가 다른 건물을 함께 선택하면 다양한 크기를 배치하기 쉬워졌습니다. 깊게 패인 빌라 부지에서 내부 도로가 겹치는 문제도 줄였습니다.
+- 미리보기에서 구역 꼭짓점을 끌어 옮겨 보세요. 놓으면 바뀐 경계로 다시 계산합니다.
+- 유형을 잘못 골랐다면 빈 유형 탭으로 바꾸세요. 같은 부지에서 이어갈 수 있고, 원래 탭으로 돌아가면 이전 계획이 복원됩니다.
+
+## English
+
+- Large sites now take less time to plan. In an offline comparison with version 0.1.166, a 420 × 300 m slab site with five building sizes took 1.4 seconds instead of 28.6 with one entrance, and 2.0–2.6 seconds instead of 49–50 with two. In-game wait times depend on the site and your PC.
+- Plans make better use of mixed building sizes. Internal roads are also less likely to overlap on villa sites with deep indentations.
+- Drag a boundary corner in the preview and release it to recalculate the layout.
+- Picked the wrong housing type? Switch to an empty type tab to reuse the site. Return to the original tab to pick up your previous plan.
+
 # 0.1.166
 
 ## 한국어

@@ -11,12 +11,27 @@ public static class ParkingFrontRules {
 }
 internal sealed partial class ResidentialLayout {
  bool[,] edgeGreen;
- int[,] packingBlocked,roadDistance;bool packingDirty=true;
+ int[,] packingBlocked,packingRoads,roadDistance;bool packingDirty=true;
  bool CandidateRoom(Parcel r,double x,double y){
   using(var timingScope=LayoutFunctionTiming.Start(o.FunctionTiming,"CandidateRoom")){
-  if(packingDirty){packingBlocked=new int[nx+1,ny+1];for(int j=0;j<ny;j++)for(int i=0;i<nx;i++)packingBlocked[i+1,j+1]=((map[i,j]!=Green&&map[i,j]!=1||reserved[i,j]||edgeGreen[i,j])?1:0)+packingBlocked[i,j+1]+packingBlocked[i+1,j]-packingBlocked[i,j];roadDistance=new int[nx,ny];var queue=new List<int>();
-   for(int j=0;j<ny;j++)for(int i=0;i<nx;i++){roadDistance[i,j]=map[i,j]==1?0:int.MaxValue;if(map[i,j]==1)queue.Add(j*nx+i);}
-   int[] dx={-1,1,0,0},dy={0,0,-1,1};for(int head=0;head<queue.Count;head++){int v=queue[head],i=v%nx,j=v/nx;for(int k=0;k<4;k++){int a=i+dx[k],b=j+dy[k];if(a<0||b<0||a>=nx||b>=ny||roadDistance[a,b]<=roadDistance[i,j]+1)continue;roadDistance[a,b]=roadDistance[i,j]+1;queue.Add(b*nx+a);}}
+  if(packingDirty){packingBlocked=new int[nx+1,ny+1];for(int j=0;j<ny;j++)for(int i=0;i<nx;i++)packingBlocked[i+1,j+1]=((map[i,j]!=Green&&map[i,j]!=1||reserved[i,j]||edgeGreen[i,j])?1:0)+packingBlocked[i,j+1]+packingBlocked[i+1,j]-packingBlocked[i,j];packingRoads=new int[nx+1,ny+1];
+   for(int j=0;j<ny;j++)for(int i=0;i<nx;i++)packingRoads[i+1,j+1]=(map[i,j]==1?1:0)+packingRoads[i,j+1]+packingRoads[i+1,j]-packingRoads[i,j];
+   roadDistance=new int[nx,ny];var queue=new List<int>();
+   // Lower bound on connector length before the candidate occupies any
+   // cells. Buildings and junction reservations cannot disappear on commit.
+   int[,] obstacles=new int[nx+1,ny+1];var clear=new bool[nx,ny];
+   for(int j=0;j<ny;j++)for(int i=0;i<nx;i++){
+    int k=map[i,j];bool blocked=k==Outside||k==Fixed||k==Reserve||k==3||k==5||reserved[i,j]||(mainJunctionBuffer?[i,j]??false);
+    obstacles[i+1,j+1]=(blocked?1:0)+obstacles[i,j+1]+obstacles[i+1,j]-obstacles[i,j];
+   }
+   double access=o.AccessRoad>0?o.AccessRoad:o.ContinuousFrontage?o.ParkingAisle:o.Road;
+   int span=(int)Math.Ceiling(access/cell),lo=span/2,hi=span-lo;
+   for(int j=0;j<ny;j++)for(int i=0;i<nx;i++){
+    int a=i-lo,b=j-lo,endX=i+hi,endY=j+hi;
+    clear[i,j]=a>=0&&b>=0&&endX<=nx&&endY<=ny&&obstacles[endX,endY]-obstacles[a,endY]-obstacles[endX,b]+obstacles[a,b]==0;
+    bool target=clear[i,j]&&map[i,j]==1;roadDistance[i,j]=target?0:int.MaxValue;if(target)queue.Add(j*nx+i);
+   }
+   int[] dx={-1,1,0,0},dy={0,0,-1,1};for(int head=0;head<queue.Count;head++){int v=queue[head],i=v%nx,j=v/nx;for(int k=0;k<4;k++){int a=i+dx[k],b=j+dy[k];if(a<0||b<0||a>=nx||b>=ny||!clear[a,b]||roadDistance[a,b]<=roadDistance[i,j]+1)continue;roadDistance[a,b]=roadDistance[i,j]+1;queue.Add(b*nx+a);}}
    packingDirty=false;}
   int left=X(x),bottom=Y(y),c=(int)Math.Ceiling((x+r.W-x0)/cell-1e-7),d=(int)Math.Ceiling((y+r.D-y0)/cell-1e-7);
   return left>=0&&bottom>=0&&c<=nx&&d<=ny&&packingBlocked[c,d]-packingBlocked[left,d]-packingBlocked[c,bottom]+packingBlocked[left,bottom]==0;
@@ -199,38 +214,155 @@ internal sealed partial class ResidentialLayout {
    }
   }
  }
+ // Reachable road cells relative to a court's anchor, before site obstacles.
+ // A connector cannot run parallel inside an existing street ribbon, even
+ // for one grid step. Site obstacles can only narrow this template envelope.
+ List<(int Y,int Left,int Right)> CourtReach(Block block){
+  double budget=block.MaxConnection/cell;
+  if(!(budget>=1&&budget<=32))return null;
+  int steps=(int)Math.Floor(budget)-1;
+  int gx=(int)Math.Floor(block.Gate.X/cell),gy=(int)Math.Floor(block.Gate.Y/cell);
+  int left=gx-steps,bottom=gy-steps,n=2*steps+1;
+  var targets=new bool[n,n];
+  var streets=block.Pieces.Where(p=>p.Kind==1).Select(p=>StreetAxis(block,p)).ToArray();
+  double narrow=o.AccessRoad>0?o.AccessRoad:o.ContinuousFrontage?o.ParkingAisle:o.Road;
+  void Flood(double width){
+   int span=(int)Math.Ceiling(width/cell);
+   double offset=span%2==0?0:.5;
+   var seen=new bool[n,n];var queue=new List<(int X,int Y,int Depth)>{(steps,steps,0)};seen[steps,steps]=true;
+   for(int head=0;head<queue.Count;head++){
+    var cur=queue[head];int x=cur.X,y=cur.Y;
+    int ax=left+x,ay=bottom+y;
+    if(ax<(int)Math.Floor(block.Bounds.X/cell)||ay<(int)Math.Floor(block.Bounds.Y/cell)||
+       ax>=(int)Math.Ceiling((block.Bounds.X+block.Bounds.W)/cell-1e-7)||ay>=(int)Math.Ceiling((block.Bounds.Y+block.Bounds.D)/cell-1e-7))targets[x,y]=true;
+    if(cur.Depth>=steps)continue;
+    var from=new Point((ax+offset)*cell,(ay+offset)*cell);
+    for(int dir=0;dir<4;dir++){
+     int xx=x+routeDx[dir],yy=y+routeDy[dir];if(seen[xx,yy])continue;
+     var to=from+new Point(routeDx[dir]*cell,routeDy[dir]*cell);
+     bool conflict=false;
+     foreach(var street in streets){
+      for(int j=1;j<street.Points.Count;j++)if(ConstructionGraph.ParallelRibbons(from,to,width,street.Points[j-1],street.Points[j],street.Width)){conflict=true;break;}
+      if(conflict)break;
+     }
+     if(conflict)continue;
+     seen[xx,yy]=true;queue.Add((xx,yy,cur.Depth+1));
+    }
+   }
+  }
+  Flood(narrow);if(o.WideParkingAisle>narrow)Flood(o.WideParkingAisle);
+  var rows=new List<(int,int,int)>();
+  for(int y=0;y<n;y++)for(int x=0;x<n;){if(!targets[x,y]){x++;continue;}int begin=x++;while(x<n&&targets[x,y])x++;rows.Add((bottom+y,left+begin,left+x));}
+  return rows;
+ }
+ bool ReachHasRoad(List<(int Y,int Left,int Right)> rows,int x,int y){
+  if(rows==null)return true;
+  foreach(var row in rows){
+   int j=y+row.Y;if(j<0||j>=ny)continue;
+   int a=Math.Max(0,x+row.Left),b=Math.Min(nx,x+row.Right);
+   if(a<b&&packingRoads[b,j+1]-packingRoads[b,j]>packingRoads[a,j+1]-packingRoads[a,j])return true;
+  }
+  return false;
+ }
  void ParkingCourtHousing(){
   if(assets.Count==0)return;
-  var shapes=new Dictionary<(string,Asset,Asset,int,int,bool,bool,bool),Parcel>();
-  var orderedAssets=assets;
+  var shapes=new Dictionary<(string,Asset,Asset,int,int,bool,bool,bool),(Parcel Bounds,Point Gate,Parcel[] Clearance)>();
+  var reachByBounds=new Dictionary<Parcel,List<(int Y,int Left,int Right)>>();
+  var candidateBuilding=new Parcel();
+  var existingBars=exact.Where(q=>q.Kind==0).ToList();
+  int verticalBars=existingBars.Count(q=>q.D>q.W);
+  bool HousingFull()=>existingBars.Count>=o.MaxBuildings||o.RespectTargetFar&&floors>=plan.Area*o.TargetFar/100;
+  var spacingAtAnchor=new Dictionary<(double,double,double,double),bool>();
+  bool SpacedAtAnchor(Parcel candidate){
+   var key=(candidate.X,candidate.Y,candidate.W,candidate.D);
+   if(spacingAtAnchor.TryGetValue(key,out var spaced))return spaced;
+   spaced=true;
+   foreach(var bar in existingBars)if(!FrontageRules.Spaced(candidate,bar,o.ParallelGap,o.Gap)){spaced=false;break;}
+   spacingAtAnchor[key]=spaced;return spaced;
+  }
+  // Fits requires road cells to be covered by a street. A centre strictly
+  // inside a building or parking bay cannot also be covered by a valid street.
+  bool CoversRoadCentre(Parcel r){
+   int a=Math.Max(0,(int)Math.Ceiling((r.X-x0)/cell-.5+1e-7)),b=Math.Max(0,(int)Math.Ceiling((r.Y-y0)/cell-.5+1e-7));
+   int c=Math.Min(nx,(int)Math.Ceiling((r.X+r.W-x0)/cell-.5-1e-7)),d=Math.Min(ny,(int)Math.Ceiling((r.Y+r.D-y0)/cell-.5-1e-7));
+   return c>a&&d>b&&packingRoads[c,d]-packingRoads[a,d]-packingRoads[c,b]+packingRoads[a,b]>0;
+  }
+  // A connector must reach an existing road outside its own painted court.
+  bool HasExternalRoad(Parcel shape,double x,double y,Point gate){
+   if(o.MaxAccessLength/cell>=Math.Max(nx,ny))return true;
+   int radius=(int)Math.Ceiling(o.MaxAccessLength/cell)+1;
+   int gx=X(x+gate.X),gy=Y(y+gate.Y);
+   int left=Math.Max(0,gx-radius),bottom=Math.Max(0,gy-radius),right=Math.Min(nx,gx+radius+1),top=Math.Min(ny,gy+radius+1);
+   int Count(int a,int b,int c,int d)=>a>=c||b>=d?0:packingRoads[c,d]-packingRoads[a,d]-packingRoads[c,b]+packingRoads[a,b];
+   int inside=Count(Math.Max(left,X(x+shape.X)),Math.Max(bottom,Y(y+shape.Y)),
+    Math.Min(right,(int)Math.Ceiling((x+shape.X+shape.W-x0)/cell-1e-7)),Math.Min(top,(int)Math.Ceiling((y+shape.Y+shape.D-y0)/cell-1e-7)));
+   return Count(left,bottom,right,top)>inside;
+  }
+  var orderedAssets=assets.ToList();
+  bool mixedSizes=reserveSizes&&assets.Select(a=>(a.Width,a.Depth)).Distinct().Skip(1).Any();
+  var used=new Dictionary<string,int>();
+  void RankAssets(){orderedAssets=assets.OrderBy(a=>used.TryGetValue(a.Id,out var n)?n:0).ThenByDescending(a=>a.Width*a.Depth).ThenBy(a=>a.Id,StringComparer.Ordinal).ToList();}
+  if(mixedSizes)RankAssets();
   var crossOptions=!o.GenerateSurfaceParking?new[]{false}:o.ParkingOrientation==2?new[]{true,false}:new[]{false,true};
   var entranceOptions=o.ContinuousFrontage&&o.WideParkingAisle>o.ParkingAisle?new[]{true,false}:new[]{false};
-  foreach(var kind in new[]{"ring","u","pair","single"}){
+  foreach(var phase in mixedSizes&&o.EdgeInfill?new[]{"seed","ring","u","pair","single"}:new[]{"ring","u","pair","single"}){
+   bool seed=phase=="seed";string kind=seed?"single":phase;
    if(o.BuildingPattern!=0&&(kind=="ring"||kind=="u"))continue;
    if(kind=="ring"&&(!o.AllowRingCourts||!o.MixedDirections)||kind=="u"&&(!o.AllowOpenCourts||!o.MixedDirections)||kind=="pair"&&!o.AllowParallelPairs||kind=="single"&&!o.EdgeInfill)continue;
+   // A single frontage court always has one longitudinal parking row.
+   var parkingDirections=kind=="single"&&o.ContinuousFrontage?new[]{false}:crossOptions;
    var housingTimer=o.Timing!=null?System.Diagnostics.Stopwatch.StartNew():null;
    int stride=Math.Max(1,(int)Math.Ceiling(o.SearchStep/cell));
-   for(int iy=1;iy<ny-1&&!Full;iy+=stride)for(int ix=1;ix<nx-1&&!Full;ix+=stride){
+   for(int iy=1;iy<ny-1&&!HousingFull();iy+=stride)for(int ix=1;ix<nx-1&&!HousingFull();ix+=stride){
     o.Cancellation.ThrowIfCancellationRequested();
+    if(seed&&used.Count==orderedAssets.Count)break;
     if(kind=="ring"&&plan.Courts.Count(c=>c.Pattern=="ring")>=o.MaxRingCourts)break;
-    if(map[ix,iy]!=Green||edgeGreen[ix,iy])continue;bool placed=false;
-    bool preferVertical=(o.MixedDirections||o.BuildingPattern==3)&&exact.Count(p=>p.Kind==0&&p.D>p.W)<exact.Count(p=>p.Kind==0)*o.VerticalPreference;
-    foreach(var a in AssetChoice.Shuffle(orderedAssets,assetRandom)){
-    var cap=assets[assetRandom.Next(assets.Count)];
+    if(map[ix,iy]!=Green||edgeGreen[ix,iy])continue;bool placed=false;spacingAtAnchor.Clear();
+    bool preferVertical=(o.MixedDirections||o.BuildingPattern==3)&&verticalBars<existingBars.Count*o.VerticalPreference;
+    bool seedMissing=mixedSizes&&used.Count<orderedAssets.Count;
+    foreach(var a in seedMissing?(IEnumerable<Asset>)orderedAssets:AssetChoice.Shuffle(assets,assetRandom)){
+    if(seed&&used.ContainsKey(a.Id))continue;
+    var cap=seedMissing&&(kind=="ring"||kind=="u")?orderedAssets.FirstOrDefault(other=>other.Id!=a.Id&&!used.ContainsKey(other.Id))??a:assets[assetRandom.Next(assets.Count)];
     foreach(bool rotation in new[]{preferVertical,!preferVertical}){
      if(rotation&&!o.MixedDirections&&o.BuildingPattern==0)continue;
       if(o.BuildingPattern==1&&(rotation?a.Depth:a.Width)<(rotation?a.Width:a.Depth)-.01||o.BuildingPattern==2&&(rotation?a.Width:a.Depth)<(rotation?a.Depth:a.Width)-.01)continue;
       if(placed)break;
       int lanes=o.GenerateSurfaceParking&&o.WideSlabParking&&kind!="single"?Math.Min(o.MaxParkingAisles,Math.Max(1,(int)Math.Ceiling(a.Homes*2*o.ParkingPerHome*o.SurfaceParkingShare/(Math.Max(a.Width,a.Depth)/o.BayWidth*2)))):1;
-      for(int lane=lanes;lane>=1&&!placed;lane--)for(int reflection=0;reflection<2&&!placed;reflection++)foreach(bool cross in crossOptions){
+      for(int lane=lanes;lane>=1&&!placed;lane--)for(int reflection=0;reflection<2&&!placed;reflection++)foreach(bool cross in parkingDirections){
        if(placed)break;if(o.ParkingOrientation==1&&cross)continue;
        foreach(bool wideEntrance in entranceOptions){
        if(placed)break;
        var key=(kind,a,cap,lane,reflection,rotation,cross,wideEntrance);
-       if(!shapes.TryGetValue(key,out var shape)){shape=ParkingCourt(0,0,a,cap,kind,lane,reflection==1,rotation,cross,wideEntrance)?.Bounds;shapes[key]=shape;}
-       if(shape==null||!CandidateRoom(shape,x0+ix*cell,y0+iy*cell))continue;
-       var block=ParkingCourt(x0+ix*cell,y0+iy*cell,a,cap,kind,lane,reflection==1,rotation,cross,wideEntrance);
-       if(CommitParkingCourt(block,kind))placed=true;
+       if(!shapes.TryGetValue(key,out var shape)){
+        var template=ParkingCourt(0,0,a,cap,kind,lane,reflection==1,rotation,cross,wideEntrance);
+        if(template!=null)shape=(template.Bounds,template.Gate,template.Pieces.Where(p=>p.Kind==0).ToArray());
+        shapes[key]=shape;
+       }
+       double x=x0+ix*cell,y=y0+iy*cell;
+       if(shape.Bounds==null||!CandidateRoom(shape.Bounds,x,y))continue;
+       if(roadDistance[X(x+shape.Gate.X),Y(y+shape.Gate.Y)]*cell>o.MaxAccessLength||!HasExternalRoad(shape.Bounds,x,y,shape.Gate))continue;
+       bool clear=true;
+       foreach(var piece in shape.Clearance){
+        candidateBuilding.X=x+piece.X;candidateBuilding.Y=y+piece.Y;
+        candidateBuilding.W=piece.W;candidateBuilding.D=piece.D;
+        if(CoversRoadCentre(candidateBuilding)||!ClearOfMain(candidateBuilding)||!SpacedAtAnchor(candidateBuilding)){clear=false;break;}
+       }
+       if(!clear)continue;
+       // Cache only templates that survived the inexpensive site tests.
+       // Beyond the cache budget the ordinary exact routing path still runs.
+       if(!reachByBounds.TryGetValue(shape.Bounds,out var reach)&&reachByBounds.Count<1024){
+        reach=CourtReach(ParkingCourt(0,0,a,cap,kind,lane,reflection==1,rotation,cross,wideEntrance));
+        reachByBounds.Add(shape.Bounds,reach);
+       }
+       if(!ReachHasRoad(reach,ix,iy))continue;
+       var block=ParkingCourt(x,y,a,cap,kind,lane,reflection==1,rotation,cross,wideEntrance);
+       if(CommitParkingCourt(block,kind)){
+        placed=true;var added=plan.Courts[plan.Courts.Count-1].Buildings;existingBars.AddRange(added);verticalBars+=added.Count(q=>q.D>q.W);
+        if(mixedSizes){
+         foreach(var lot in plan.Courts[plan.Courts.Count-1].Buildings)used[lot.AssetId]=(used.TryGetValue(lot.AssetId,out var n)?n:0)+1;
+         RankAssets();
+        }
+       }
        }
       }
       if(placed)break;
@@ -238,7 +370,7 @@ internal sealed partial class ResidentialLayout {
      if(placed)break;
     }
    }
-   if(housingTimer!=null)o.Timing("housing."+kind,housingTimer.ElapsedMilliseconds);
+   if(housingTimer!=null)o.Timing("housing."+phase,housingTimer.ElapsedMilliseconds);
   }
   var infillTimer=o.Timing!=null?System.Diagnostics.Stopwatch.StartNew():null;
   // Disabling the rule explicitly allows unserved residual bars.

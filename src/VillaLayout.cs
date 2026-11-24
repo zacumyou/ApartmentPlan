@@ -57,13 +57,24 @@ public static class VillaLayout {
    }
   }else{
   double usable=x1-x0-2*margin;mains=Math.Max(1,(int)Math.Ceiling(usable/o.VillaMainSpacing));
-  for(int i=0;i<mains;i++)Scan(true,x0+margin+usable*(i+.5)/mains,aisle,"aisle");
-  for(double y=rowStart;y<y1-margin-aisle/2;y+=pitch)Scan(false,y,aisle,"aisle");
   // The perimeter road is authored as Beziers; native generation restores them
   // after graph crossings split the sampled centreline.
   bool Corridor(Point a,Point b,double width){var tangent=VillaGeometry.Unit(b-a);if(tangent.Length<.1)return true;return ClearShape(VillaGeometry.Box((a+b)*.5,new Point(-tangent.Y,tangent.X),(b-a).Length,width));}
-  routes.Clear();
-  if(o.VillaFollowBoundary){foreach(var c in VillaGeometry.BoundaryGrid(poly,lotDepth+aisle/2+margin+frontageSetback,2*lotDepth+aisle+2*frontageSetback,selected.Max(a=>Span(a.Width,a.GeometryWidth,o)),Math.Max(depth,(lotDepth+depth)/2),aisle,frontageSetback)){
+  var sides=VillaGeometry.BoundarySides(poly);
+  // Interpolating four boundary chains folds the streets back across one
+  // another when a chain doubles back by an entire housing row.
+  bool DoublesBack(List<Point> side){
+   var axis=VillaGeometry.Unit(side[side.Count-1]-side[0]);
+   double furthest=0;
+   foreach(var vertex in side){
+    double station=SiteFrame.Dot(vertex-side[0],axis);
+    if(furthest-station>=pitch)return true;
+    furthest=Math.Max(furthest,station);
+   }
+   return false;
+  }
+  bool followBoundary=o.VillaFollowBoundary&&!sides.Any(DoublesBack);
+  if(followBoundary){foreach(var c in VillaGeometry.BoundaryGrid(poly,lotDepth+aisle/2+margin+frontageSetback,2*lotDepth+aisle+2*frontageSetback,selected.Max(a=>Span(a.Width,a.GeometryWidth,o)),Math.Max(depth,(lotDepth+depth)/2),aisle,frontageSetback)){
    var pts=VillaGeometry.Sample(c);if(pts.Skip(1).Where((q,i)=>!Corridor(pts[i],q,aisle)).Any())continue;
    contour.Add(c);routes.Add(new PlanRoute{Use="aisle",Width=aisle,Points=pts});
   }}else{for(int i=0;i<mains;i++)Scan(true,x0+margin+usable*(i+.5)/mains,aisle,"aisle");for(double y=rowStart;y<y1-margin-aisle/2;y+=pitch)Scan(false,y,aisle,"aisle");}
@@ -125,10 +136,10 @@ public static class VillaLayout {
   }routes.Clear();routes.AddRange(cleaned);
   // On long narrow sites use continuous cross streets between the perimeter
   // alleys. Tiny Bezier pieces must not become independently pruned branches.
-  var sides=VillaGeometry.BoundarySides(poly);var longSide=sides.OrderByDescending(side=>side.Skip(1).Select((v,i)=>(v-side[i]).Length).Sum()).First();
+  var longSide=sides.OrderByDescending(side=>side.Skip(1).Select((v,i)=>(v-side[i]).Length).Sum()).First();
   var longDirection=VillaGeometry.Unit(longSide.Last()-longSide[0]);var crossDirection=new Point(-longDirection.Y,longDirection.X);
   double longMin=poly.Min(v=>SiteFrame.Dot(v,longDirection)),longMax=poly.Max(v=>SiteFrame.Dot(v,longDirection)),crossMin=poly.Min(v=>SiteFrame.Dot(v,crossDirection)),crossMax=poly.Max(v=>SiteFrame.Dot(v,crossDirection));
-  if(o.VillaFollowBoundary&&(longMax-longMin)>(crossMax-crossMin)*2.2){
+  if(followBoundary&&(longMax-longMin)>(crossMax-crossMin)*2.2){
    bool Transverse(PlanRoute r)=>r.Points.Count>1&&Math.Abs(SiteFrame.Dot(VillaGeometry.Unit(r.Points.Last()-r.Points[0]),longDirection))<.65;
    routes.RemoveAll(r=>r.Use!="main"&&Transverse(r));
    contour.RemoveAll(c=>!mainCurves.Contains(c)&&Math.Abs(SiteFrame.Dot(VillaGeometry.Unit(c.D-c.A),longDirection))<.65);
@@ -178,14 +189,34 @@ public static class VillaLayout {
   // Only keep components reachable from an approved external connection.
   foreach(var r in routes.Where(r=>r.Points.Count>2)){var c=contour.FirstOrDefault(c=>r.Points.All(q=>c.NearBounds(q)&&(c.At(c.Parameter(q))-q).Length<.08));if(c!=null)r.Curves=new List<PlanBezier>{c};}
   var graph=ConstructionGraph.Create(p);var reached=new HashSet<ConstructionEdge>();
-  foreach(var e in graph)if(roots.Any(q=>Distance(p.World(q),e.A,e.B)<.1))reached.Add(e);
-  bool changed=true;while(changed){changed=false;foreach(var e in graph)if(!reached.Contains(e)&&reached.Any(r=>(r.A-e.A).Length<.03||(r.A-e.B).Length<.03||(r.B-e.A).Length<.03||(r.B-e.B).Length<.03)){reached.Add(e);changed=true;}}
+  var reachedNodes=new Dictionary<(int,int),List<Point>>();
+  (int,int) NodeCell(Point q)=>((int)Math.Floor(q.X/.03),(int)Math.Floor(q.Y/.03));
+  void Reach(ConstructionEdge edge){
+   reached.Add(edge);
+   foreach(var q in new[]{edge.A,edge.B}){
+    var key=NodeCell(q);
+    if(!reachedNodes.TryGetValue(key,out var nodes))reachedNodes[key]=nodes=new List<Point>();
+    nodes.Add(q);
+   }
+  }
+  bool TouchesNetwork(Point q){
+   var (x,y)=NodeCell(q);
+   for(int i=x-1;i<=x+1;i++)for(int j=y-1;j<=y+1;j++)
+    if(reachedNodes.TryGetValue((i,j),out var nodes))foreach(var v in nodes)if((v-q).Length<.03)return true;
+   return false;
+  }
+  foreach(var e in graph)if(roots.Any(q=>Distance(p.World(q),e.A,e.B)<.1))Reach(e);
+  bool changed=true;while(changed){changed=false;foreach(var e in graph)if(!reached.Contains(e)&&(TouchesNetwork(e.A)||TouchesNetwork(e.B))){Reach(e);changed=true;}}
   p.VillaThrough=VillaRoadRules.Through(reached.ToList(),p.VillaRoots,rootDirections,o.Road);
   routes.Clear();foreach(var e in reached)routes.Add(new PlanRoute{Use=e.Use,Width=e.Width,Points=new List<Point>{p.Local(e.A),p.Local(e.B)}});
   }
   var occupied=new List<Point[]>();
+
   var roadSegments=routes.SelectMany(r=>r.Points.Skip(1).Select((b,i)=>new{A=r.Points[i],B=b,Width=r.Width,Use=r.Use})).ToArray();
+
   foreach(var r in roadSegments){var tangent=VillaGeometry.Unit(r.B-r.A);var box=VillaGeometry.Box((r.A+r.B)*.5,new Point(-tangent.Y,tangent.X),(r.B-r.A).Length,r.Width);var parcel=VillaGeometry.Bounds(box,1);parcel.PlacementOutline=box;p.Parcels.Add(parcel);occupied.Add(box);}
+
+  var roadBounds=occupied.Select(b=>VillaGeometry.Bounds(b)).ToArray();
   // Retain only curve pieces whose centreline survived reachability filtering.
   contour=contour.Where(c=>roadSegments.Any(e=>c.NearBounds((e.A+e.B)*.5)&&(c.At(c.Parameter((e.A+e.B)*.5))-(e.A+e.B)*.5).Length<.1)).ToList();
   foreach(var curve in contour){
@@ -196,6 +227,8 @@ public static class VillaLayout {
    }
   }
   o.Observation?.Stage("candidates");o.Observation?.Set("connections",roots.Count);o.Observation?.Set("rejectedConnections",p.VillaRejectedConnections.Count);o.Observation?.Set("gridPieces",gridPieces);
+  bool mixedSizes=selected.Select(a=>(a.Width,a.Depth)).Distinct().Skip(1).Any();
+  if(mixedSizes)selected=selected.OrderByDescending(a=>a.Width*a.Depth).ThenBy(a=>a.Id,StringComparer.Ordinal).ToList();
   int index=0;var candidates=new List<Parcel>();var mainCandidates=new HashSet<Parcel>();
   void Place(Point roadPoint,Point tangent,double nativeWidth,int sign,string use){
    o.Cancellation.ThrowIfCancellationRequested();
@@ -206,7 +239,13 @@ public static class VillaLayout {
    if(!ClearShape(envelope)){o.Observation?.Add("boundaryRejected");return;}
    // Extra spacing separates houses, without extending the road collision footprint.
    var roadFootprint=VillaGeometry.Box(center,forward,Math.Min(width,a.Width),Math.Min(d,a.Depth));
-   if(occupied.Any(b=>VillaGeometry.Overlap(b,roadFootprint))){o.Observation?.Add("roadRejected");return;}
+   var bounds=VillaGeometry.Bounds(roadFootprint);
+   bool hitsRoad=false;
+   for(int i=0;i<roadBounds.Length;i++){var road=roadBounds[i];
+    if(road.X>bounds.X+bounds.W||bounds.X>road.X+road.W||road.Y>bounds.Y+bounds.D||bounds.Y>road.Y+road.D)continue;
+    if(VillaGeometry.Overlap(occupied[i],roadFootprint)){hitsRoad=true;break;}
+   }
+   if(hitsRoad){o.Observation?.Add("roadRejected");return;}
    var fullLot=VillaGeometry.Box(center,forward,a.Width,a.Depth);
    if(!ClearShape(fullLot)){o.Observation?.Add("boundaryRejected");return;}
    // The supporting street must be internal along the full frontage, not an external approach.
@@ -253,11 +292,30 @@ public static class VillaLayout {
   bool Conflict(Parcel a,Parcel b)=>Layout.Overlap(a.CompactBounds,b.CompactBounds)&&VillaGeometry.Overlap(a.PlacementOutline,b.PlacementOutline);
   o.Observation?.Set("candidates",candidates.Count);o.Observation?.Stage("packing");
   var packed=new List<Parcel>();
-  foreach(var order in new IEnumerable<Parcel>[] {candidates,candidates.AsEnumerable().Reverse(),candidates.OrderBy(c=>c.X),candidates.OrderBy(c=>c.Y),candidates.OrderByDescending(c=>c.X),candidates.OrderByDescending(c=>c.Y)}){
-   var trial=new List<Parcel>();foreach(var c in order.OrderByDescending(c=>mainCandidates.Contains(c))){if(trial.Count>=o.VillaMaxBuildings)break;if(!trial.Any(q=>Conflict(c,q)))trial.Add(c);}if(trial.Count(mainCandidates.Contains)>packed.Count(mainCandidates.Contains)||trial.Count(mainCandidates.Contains)==packed.Count(mainCandidates.Contains)&&trial.Count>packed.Count)packed=trial;
+  // Give each feasible footprint one turn per round before density infill.
+  var representatives=new List<Parcel>();
+  if(mixedSizes){
+   var queues=candidates.GroupBy(c=>(c.W,c.D)).OrderByDescending(g=>g.Key.W*g.Key.D)
+    .Select(g=>g.OrderByDescending(mainCandidates.Contains).Reverse().ToList()).ToList();
+   while(queues.Count>1&&representatives.Count<o.VillaMaxBuildings){
+    o.Cancellation.ThrowIfCancellationRequested();
+    foreach(var queue in queues){
+     while(queue.Count>0){
+      int last=queue.Count-1;var lot=queue[last];queue.RemoveAt(last);if(representatives.Any(q=>Conflict(lot,q)))continue;
+      representatives.Add(lot);break;
+     }
+     if(representatives.Count>=o.VillaMaxBuildings)break;
+    }
+    queues.RemoveAll(queue=>queue.Count==0);
+   }
   }
+  foreach(var order in new IEnumerable<Parcel>[] {candidates,candidates.AsEnumerable().Reverse(),candidates.OrderBy(c=>c.X),candidates.OrderBy(c=>c.Y),candidates.OrderByDescending(c=>c.X),candidates.OrderByDescending(c=>c.Y)}){
+   var trial=new List<Parcel>(representatives);foreach(var c in order.OrderByDescending(c=>mainCandidates.Contains(c))){if(trial.Count>=o.VillaMaxBuildings)break;if(!trial.Any(q=>Conflict(c,q)))trial.Add(c);}if(trial.Count(mainCandidates.Contains)>packed.Count(mainCandidates.Contains)||trial.Count(mainCandidates.Contains)==packed.Count(mainCandidates.Contains)&&trial.Count>packed.Count)packed=trial;
+  }
+  var protectedLots=new HashSet<Parcel>(representatives);
   for(int pass=0;pass<4&&packed.Count<o.VillaMaxBuildings;pass++){
    bool improved=false;foreach(var old in packed.ToArray()){
+    if(protectedLots.Contains(old))continue;
     o.Cancellation.ThrowIfCancellationRequested();var choices=candidates.Where(c=>!ReferenceEquals(c,old)&&Conflict(c,old)&&!packed.Any(q=>!ReferenceEquals(q,old)&&Conflict(c,q))).ToArray();
     Parcel a=null,b=null;for(int i=0;i<choices.Length&&a==null;i++)for(int j=i+1;j<choices.Length;j++)if(!Conflict(choices[i],choices[j])&&(!mainCandidates.Contains(old)||mainCandidates.Contains(choices[i])||mainCandidates.Contains(choices[j]))){a=choices[i];b=choices[j];break;}
     if(a==null)continue;packed.Remove(old);packed.Add(a);packed.Add(b);improved=true;if(packed.Count>=o.VillaMaxBuildings)break;
@@ -266,31 +324,55 @@ public static class VillaLayout {
   p.Parcels.AddRange(packed);o.Observation?.Set("packed",packed.Count);o.Observation?.Stage("pruning");
   // Merge empty road-enclosed wedges into neighbouring housing blocks. Never
   // remove the through road or a street required by an already placed house.
+  List<ConstructionEdge> currentGraph=null;
   for(int pass=0;!p.VillaExistingRoadsOnly&&pass<32;pass++){
-   var checkGraph=ConstructionGraph.Create(p);var empty=VillaRoadRules.EmptyBlocks(p,checkGraph);if(empty.Count==0)break;
+   var checkGraph=currentGraph??ConstructionGraph.Create(p);currentGraph=checkGraph;var empty=VillaRoadRules.EmptyBlocks(p,checkGraph);if(empty.Count==0)break;
    bool removed=false;
+   var faceEdges=new List<ConstructionEdge>();var faceIndex=new ConstructionGraph.EdgeGrid();
+   foreach(var face in empty)for(int i=0;i<face.Count;i++){
+    var edge=new ConstructionEdge{A=face[i],B=face[(i+1)%face.Count]};
+    faceIndex.Add(faceEdges.Count,edge,.100001);faceEdges.Add(edge);
+   }
+   var routePairs=routes.Where(r=>r.Points.Count==2).ToArray();
+   var pairIndex=new ConstructionGraph.EdgeGrid();
+   for(int i=0;i<routePairs.Length;i++){
+    var points=routePairs[i].Points;
+    pairIndex.Add(i,new ConstructionEdge{A=points[0],B=points[1]},.030001);
+   }
+   var triedChains=new HashSet<HashSet<PlanRoute>>(HashSet<PlanRoute>.CreateSetComparer());
    foreach(var candidate in routes.Where(r=>r.Use!="main"&&r.Points.Count==2&&(r.Points[1]-r.Points[0]).Length>=.1).OrderByDescending(r=>(r.Points[1]-r.Points[0]).Length).ToArray()){
     var a=p.World(candidate.Points[0]);var b=p.World(candidate.Points[1]);
-    if(!empty.Any(face=>Enumerable.Range(0,face.Count).Any(i=>(VillaGeometry.Nearest((a+b)*.5,face[i],face[(i+1)%face.Count])-(a+b)*.5).Length<.1)))continue;
-    var originalRoutes=routes.ToList();var originalLots=p.Parcels.ToList();var chain=new HashSet<PlanRoute>{candidate};var pending=new List<Point>(candidate.Points);
-    for(int cursor=0;cursor<pending.Count;cursor++){var q=pending[cursor];var incident=routes.Where(r=>r.Points.Count==2&&r.Points.Any(v=>(v-q).Length<.03)).ToArray();if(incident.Length!=2)continue;foreach(var r in incident)if(r.Use!="main"&&chain.Add(r))foreach(var v in r.Points)pending.Add(v);}
+    var middle=(a+b)*.5;var nearby=faceIndex.At(middle);
+    if(nearby==null||!nearby.Any(i=>(VillaGeometry.Nearest(middle,faceEdges[i].A,faceEdges[i].B)-middle).Length<.1))continue;
+    var chain=new HashSet<PlanRoute>{candidate};var pending=new List<Point>(candidate.Points);
+    for(int cursor=0;cursor<pending.Count;cursor++){var q=pending[cursor];var incident=pairIndex.At(q).Select(i=>routePairs[i]).Where(r=>(r.Points[0]-q).Length<.03||(r.Points[1]-q).Length<.03).ToArray();if(incident.Length!=2)continue;foreach(var r in incident)if(r.Use!="main"&&chain.Add(r))foreach(var v in r.Points)pending.Add(v);}
+    if(!triedChains.Add(chain))continue;
+    var originalRoutes=routes.ToList();var originalLots=p.Parcels.ToList();
     routes.RemoveAll(r=>chain.Contains(r));
-    var next=ConstructionGraph.Create(p);var unsupported=new List<Parcel>();FrontageNetwork.Missing(p,selected,aisle,frontageSetback,null,unsupported);p.Parcels.RemoveAll(r=>unsupported.Contains(r));
-    if(VillaRoadRules.EmptyBlocks(p,next).Count<empty.Count&&FrontageNetwork.Missing(p,selected,aisle,frontageSetback)==0){removed=true;break;}
+    var next=ConstructionGraph.Create(p);var unsupported=new List<Parcel>();int missing=FrontageNetwork.Missing(p,selected,aisle,frontageSetback,null,unsupported,preparedGraph:next);p.Parcels.RemoveAll(r=>unsupported.Contains(r));
+    if(VillaRoadRules.EmptyBlocks(p,next).Count<empty.Count&&(missing==0||FrontageNetwork.Missing(p,selected,aisle,frontageSetback)==0)){currentGraph=unsupported.Count==0?next:null;removed=true;break;}
     routes.Clear();routes.AddRange(originalRoutes);p.Parcels.Clear();p.Parcels.AddRange(originalLots);
    }
    if(!removed)break;
   }
   for(int pass=0;!p.VillaExistingRoadsOnly&&pass<64;pass++){
-   var network=ConstructionGraph.Create(p);bool removed=false;
+   var network=currentGraph??ConstructionGraph.Create(p);bool removed=false;
+   var leafIndex=new ConstructionGraph.EdgeGrid();
+   for(int i=0;i<network.Count;i++)leafIndex.Add(i,network[i],.030001);
    foreach(var r in routes.Where(r=>r.Use!="main"&&r.Points.Count==2).ToArray()){
     var a=p.World(r.Points[0]);var b=p.World(r.Points[1]);
-    bool Leaf(Point q)=>!p.VillaRoots.Any(root=>(root-q).Length<.1)&&network.Count(e=>(e.A-q).Length<.03||(e.B-q).Length<.03)==1;
+    bool Leaf(Point q){
+     if(p.VillaRoots.Any(root=>(root-q).Length<.1))return false;
+     var local=leafIndex.At(q);
+     return local!=null&&local.Count(i=>(network[i].A-q).Length<.03||(network[i].B-q).Length<.03)==1;
+    }
     if(!Leaf(a)&&!Leaf(b))continue;
     // Curve metadata is kept only for supported sampled spans.
-    if(contour.Any(c=>(c.At(c.Parameter((r.Points[0]+r.Points[1])*.5))-(r.Points[0]+r.Points[1])*.5).Length<.1))continue;
+    var midpoint=(r.Points[0]+r.Points[1])*.5;
+    if(contour.Any(c=>c.NearBounds(midpoint)&&(c.At(c.Parameter(midpoint))-midpoint).Length<.1))continue;
     int at=routes.IndexOf(r);routes.RemoveAt(at);
-    if(FrontageNetwork.Missing(p,selected,aisle,frontageSetback)==0){removed=true;break;}routes.Insert(at,r);
+    var trialGraph=ConstructionGraph.Create(p);
+    if(FrontageNetwork.Missing(p,selected,aisle,frontageSetback,preparedGraph:trialGraph)==0){currentGraph=trialGraph;removed=true;break;}routes.Insert(at,r);
    }if(!removed)break;
   }
   o.Observation?.Stage("curves");
@@ -301,13 +383,17 @@ public static class VillaLayout {
   foreach(var c in contour){var intervals=finalEdges.Where(e=>c.NearBounds(p.Local((e.A+e.B)*.5))&&(c.At(c.Parameter(p.Local(e.A)))-p.Local(e.A)).Length<.08&&(c.At(c.Parameter(p.Local(e.B)))-p.Local(e.B)).Length<.08&&(c.At(c.Parameter(p.Local((e.A+e.B)*.5)))-p.Local((e.A+e.B)*.5)).Length<.08).Select(e=>new{Start=Math.Min(c.Parameter(p.Local(e.A)),c.Parameter(p.Local(e.B))),End=Math.Max(c.Parameter(p.Local(e.A)),c.Parameter(p.Local(e.B))),e.Width,e.Use}).OrderBy(e=>e.Start).ToArray();
    for(int i=0;i<intervals.Length;){var a=intervals[i];double end=a.End;int j=i+1;while(j<intervals.Length&&intervals[j].Use==a.Use&&intervals[j].Start-end<.0001){end=intervals[j].End;j++;}if(end-a.Start>.0001)routes.Add(new PlanRoute{Use=a.Use,Width=a.Width,Curves=new List<PlanBezier>{c.Slice(a.Start,end)}});i=j;}
   }
-  p.VillaEmptyBlocks=p.VillaExistingRoadsOnly?0:VillaRoadRules.EmptyBlocks(p,ConstructionGraph.Create(p)).Count;
+  var committedEdges=ConstructionGraph.Create(p);
+  p.VillaEmptyBlocks=p.VillaExistingRoadsOnly?0:VillaRoadRules.EmptyBlocks(p,committedEdges).Count;
   p.Parcels.RemoveAll(r=>r.Kind==1);occupied.Clear();occupied.AddRange(p.Parcels.Where(r=>r.Kind==0).Select(r=>r.PlacementOutline));
-  foreach(var edge in ConstructionGraph.Create(p)){var a=p.Local(edge.A);var b=p.Local(edge.B);var t=VillaGeometry.Unit(b-a);var box=VillaGeometry.Box((a+b)*.5,new Point(-t.Y,t.X),(b-a).Length,edge.Width);var parcel=VillaGeometry.Bounds(box,1);parcel.PlacementOutline=box;p.Parcels.Add(parcel);occupied.Add(box);}
+
+  foreach(var edge in committedEdges){var a=p.Local(edge.A);var b=p.Local(edge.B);var t=VillaGeometry.Unit(b-a);var box=VillaGeometry.Box((a+b)*.5,new Point(-t.Y,t.X),(b-a).Length,edge.Width);var parcel=VillaGeometry.Bounds(box,1);parcel.PlacementOutline=box;p.Parcels.Add(parcel);occupied.Add(box);}
+
   // Coalesce unused cells into strips; existing tree/Grass Sprites integration consumes green parcels.
   o.Observation?.Stage("parks");
+  var obstacles=occupied.Select(shape=>(shape,bounds:VillaGeometry.Bounds(shape))).ToArray();
   const double cell=4;
-  for(double y=y0;!p.VillaExistingRoadsOnly&&y+cell<=y1;y+=cell){o.Cancellation.ThrowIfCancellationRequested();double start=double.NaN;for(double x=x0;x<=x1;x+=cell){var tile=new Parcel{Kind=4,X=x,Y=y,W=cell,D=cell};bool free=x+cell<=x1&&Clear(tile)&&!occupied.Any(b=>VillaGeometry.Overlap(b,tile.Corners));if(free&&double.IsNaN(start))start=x;if(!free&&!double.IsNaN(start)){p.Parcels.Add(new Parcel{Kind=4,X=start,Y=y,W=x-start,D=cell});start=double.NaN;}}}
+  for(double y=y0;!p.VillaExistingRoadsOnly&&y+cell<=y1;y+=cell){o.Cancellation.ThrowIfCancellationRequested();double start=double.NaN;for(double x=x0;x<=x1;x+=cell){var tile=new Parcel{Kind=4,X=x,Y=y,W=cell,D=cell};var corners=tile.Corners;bool free=x+cell<=x1&&Clear(tile)&&!obstacles.Any(b=>b.bounds.X<=x+cell&&b.bounds.X+b.bounds.W>=x&&b.bounds.Y<=y+cell&&b.bounds.Y+b.bounds.D>=y&&VillaGeometry.Overlap(b.shape,corners));if(free&&double.IsNaN(start))start=x;if(!free&&!double.IsNaN(start)){p.Parcels.Add(new Parcel{Kind=4,X=start,Y=y,W=x-start,D=cell});start=double.NaN;}}}
   p.GrassPockets.AddRange(p.Parcels.Where(r=>r.Kind==4));
   VillaVariety.Assign(p.Parcels.Where(r=>r.Kind==0).ToList(),selected);
   o.Observation?.Stage("summary");

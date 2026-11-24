@@ -2,24 +2,25 @@
 
 ## 한국어
 
-**당신만의 아파트 단지를 만들어 보세요.**
+지도에 단지 경계를 그리고 입구를 정하면, 선택한 건물로 판상형 아파트·탑상형 아파트·빌라 단지의 배치안을 만듭니다. 건물과 함께 단지 안 도로, 주차 공간, 보행로가 어디에 놓이는지 확인한 뒤 건설할 수 있습니다.
 
-Apartment Plan은 구역과 입구를 지정하고, 선택한 아파트 에셋으로 단지를 계획하고 배치하는 Cities: Skylines II 모드입니다. 건물·내부 도로·주차 공간·보행로·조경을 미리보기로 확인한 뒤 직접 건설을 확정할 수 있습니다.
-
-주차가 부족하면 유휴부지 주차 보충을 켤 수 있습니다. 완성된 경계의 변을 잡아 꼭짓점을 추가할 수 있으며, 저장하지 않고 닫을 때 확인 안내가 표시됩니다.
+대형 부지의 배치 미리보기를 더 빨리 계산합니다. 420 × 300m 판상형 부지에 크기가 다른 건물 5종을 선택한 비교 시험에서, 입구가 1개일 때 28.6초에서 1.4초로, 2개일 때 약 49~50초에서 2.0~2.6초로 줄었습니다. 직전 공개 버전(0.1.166)과 게임 밖에서 비교한 결과이며, 실제 대기 시간은 부지와 PC에 따라 달라집니다.
 
 ### 시작하기
 
-1. Apartment Plan과 필수 에셋 팩 [AP Invisible Road Pack](https://mods.paradoxplaza.com/mods/165049/Windows), [CS KR Parking Pack](https://mods.paradoxplaza.com/mods/149013/Windows)을 같은 플레이셋에서 활성화합니다. CS KR Parking Pack은 주차 데칼 표시에 필요합니다. [Anarchy](https://mods.paradoxplaza.com/mods/74604/Windows)도 함께 활성화해 주세요. 탑상형 기본 지하주차장 입구를 제공하는 [CS KR Underground Parking Lot](https://mods.paradoxplaza.com/mods/167777/Windows)도 필수 모드로 추가되었습니다.
-2. 화면 우상단 Apartment Plan 메뉴에서 구역과 입구를 지정합니다.
-3. 사용할 건물 에셋과 배치 조건을 선택하고 계획도를 확인합니다.
-4. 실제 배치 미리보기에서 게임의 건설 검사 결과를 확인한 뒤 적용합니다.
+1. 아래 필수 모드 4개를 Apartment Plan과 같은 플레이셋에서 켭니다.
+2. 게임 화면 오른쪽 위에서 Apartment Plan을 열고 단지 유형을 고릅니다. 지도에서 구역 경계를 그린 뒤 경계선을 클릭해 입구를 지정합니다.
+3. 사용할 건물을 선택하고 배치 미리보기를 엽니다. 건물 사이가 너무 좁다면 배치 조건에서 간격을 바꿔 보세요. 세부 조절에 마우스를 올리면 값에 따라 무엇이 달라지는지 그림으로 볼 수 있습니다.
+4. 배치가 마음에 들면 실제 건설 미리보기를 열고 건설을 확정합니다.
 
-**판상형 아파트·탑상형 아파트·빌라 단지** 제작을 지원합니다. 탑상형은 지하주차장 입구와 내부 보행로를 포함한 계획을, 빌라는 저층 주거 건물과 촘촘한 내부 도로망을 구성할 수 있습니다. 빌라의 기본 중앙도로는 양방향 2차로 일반도로입니다. 설치된 단지는 단지 편집에서 변경 계획을 만들고, 확인 후 기존 단지 시설을 삭제하고 수정 계획으로 다시 배치할 수 있습니다.
+**필수 모드**  
+[AP Invisible Road Pack](https://mods.paradoxplaza.com/mods/165049/Windows) · [CS KR Parking Pack](https://mods.paradoxplaza.com/mods/149013/Windows) · [Anarchy](https://mods.paradoxplaza.com/mods/74604/Windows) · [CS KR Underground Parking Lot](https://mods.paradoxplaza.com/mods/167777/Windows)
+
+‘넓게 보기’를 켜면 왼쪽에서 배치 조건을 조절하면서 오른쪽에서 건물을 고를 수 있습니다.
 
 ### 함께 활용할 아파트 에셋
 
-아파트 건물 에셋은 이 모드에 포함되지 않습니다. 마음에 드는 에셋을 별도로 구독하고 모드에서 선택해 보세요. 실제 사용 기록에 등장한 예시는 다음과 같습니다.
+아파트 건물 에셋은 이 모드에 포함되지 않습니다. 마음에 드는 에셋을 별도로 구독하고 모드에서 선택해 보세요. 아래는 선택해서 사용할 수 있는 예시입니다.
 
 - [Korea 1998 Apartment · 한국 1998년식 아파트](https://mods.paradoxplaza.com/mods/157735/Any) — naeng.EEEEEE
 - [TheSharp Apartment · 에코시티 더샵](https://mods.paradoxplaza.com/mods/139295/Any) — 의릴라
@@ -35,7 +36,7 @@ Apartment Plan은 구역과 입구를 지정하고, 선택한 아파트 에셋�
 
 ### 참고 사항
 
-- 개발 중인 0.1.166 버전입니다. 중요한 도시는 별도 저장본으로 보관해 주세요.
+- 중요한 도시는 별도 저장본으로 보관해 주세요.
 - 기존 도로를 손상시킬 수 있는 변경이나 게임이 거부한 배치는 적용되지 않을 수 있습니다.
 - 단지 수정 배치는 기존 시설을 삭제합니다. 삭제 후 배치를 취소해도 시설이 자동 복원되지는 않습니다.
 - 단지에 사용한 건물·도로 에셋은 세이브의 의존성이 될 수 있습니다. 구독 해제 후 로드를 보장하지 않습니다.
@@ -51,24 +52,25 @@ Apartment Plan은 구역과 입구를 지정하고, 선택한 아파트 에셋�
 
 ## English
 
-**Make your own apartment complex.**
+Draw a boundary, mark the entrances and choose your buildings. Apartment Plan lays out a slab apartment complex, a tower complex or a low-rise neighbourhood. You can see where the buildings, streets, parking and footpaths will go before you build.
 
-Apartment Plan lets you define an area and its entrances, choose apartment assets, and plan a residential compound in Cities: Skylines II. Preview buildings, internal roads, parking, pedestrian paths and landscaping before confirming construction.
-
-Enable open-space parking infill when parking is insufficient. Insert vertices by picking a completed boundary edge, and receive a confirmation before discarding unsaved edits.
+Large sites now take less time to plan. In an offline comparison with version 0.1.166, a 420 × 300 m slab site with five building sizes took 1.4 seconds instead of 28.6 with one entrance, and 2.0–2.6 seconds instead of 49–50 with two. In-game wait times depend on the site and your PC.
 
 ### Getting started
 
-1. Enable Apartment Plan and both required asset packs, [AP Invisible Road Pack](https://mods.paradoxplaza.com/mods/165049/Windows) and [CS KR Parking Pack](https://mods.paradoxplaza.com/mods/149013/Windows), in the same playset. CS KR Parking Pack is required for parking decals to appear. Enable [Anarchy](https://mods.paradoxplaza.com/mods/74604/Windows) as well. Also enable the required [CS KR Underground Parking Lot](https://mods.paradoxplaza.com/mods/167777/Windows), which supplies the default tower-mode underground parking entrance.
-2. Open Apartment Plan from the top-right menu and define the boundary and entrances.
-3. Choose building assets and layout settings, then review the plan.
-4. Open the construction preview, check the game's validation results, and apply it.
+1. Enable the four required mods below in the same playset as Apartment Plan.
+2. Open Apartment Plan at the top right of the game screen and choose a housing type. Draw the boundary on the map, then click its edge to place an entrance.
+3. Choose your buildings and preview the layout. Adjust the spacing if the buildings are too close together. Hover over a slider in the detailed settings to compare two examples.
+4. When you like the layout, open the construction preview and confirm construction.
 
-**Slab apartments, tower apartments and villa / low-rise residential compounds** are available. Tower plans include an underground parking entrance and internal pedestrian paths. Villa mode arranges low-rise buildings and a compact internal road network, with a standard two-way, two-lane central road by default. For an existing compound, edit its plan, confirm removal of its existing facilities, then preview and apply the revised layout.
+**Required mods**  
+[AP Invisible Road Pack](https://mods.paradoxplaza.com/mods/165049/Windows) · [CS KR Parking Pack](https://mods.paradoxplaza.com/mods/149013/Windows) · [Anarchy](https://mods.paradoxplaza.com/mods/74604/Windows) · [CS KR Underground Parking Lot](https://mods.paradoxplaza.com/mods/167777/Windows)
+
+Use wide view to adjust the layout on the left while choosing buildings on the right.
 
 ### Apartment assets to try
 
-Apartment buildings are not bundled with this mod. Subscribe to assets separately and select them in Apartment Plan. Examples found in actual usage records include:
+Apartment buildings are not bundled with this mod. Subscribe to assets separately and select them in Apartment Plan. Here are a few optional examples.
 
 - [Korea 1998 Apartment](https://mods.paradoxplaza.com/mods/157735/Any) — naeng.EEEEEE
 - [TheSharp Apartment](https://mods.paradoxplaza.com/mods/139295/Any) — 의릴라
@@ -84,7 +86,7 @@ Inspired by [Parking Lot Tool](https://mods.paradoxplaza.com/mods/161156/Windows
 
 ### Notes
 
-- Version 0.1.166 is in development. Keep a separate save of important cities.
+- Keep a separate save of important cities.
 - Construction may be blocked when it would damage existing roads or fails the game's validation.
 - Compound replacement removes existing facilities. Cancelling placement afterwards does not automatically restore them.
 - Placed building and road assets may remain save dependencies. Loading after unsubscribing is not guaranteed.
@@ -97,3 +99,5 @@ A limited diagnostic summary is sent to the developer's site database only after
 [Source and issue reports](https://github.com/zacumyou/ApartmentPlan)
 
 [Paradox Mods](https://mods.paradoxplaza.com/mods/165052/Windows) · [Discussion / 피드백](https://forum.paradoxplaza.com/forum/threads/mod-alpha-apartment-plan-apartment-complexes-discussion-feedback.1947195/)
+
+

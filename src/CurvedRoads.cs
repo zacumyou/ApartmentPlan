@@ -42,6 +42,10 @@ internal sealed partial class ResidentialLayout {
     if(along>margin&&back>margin)skeletons.Add(new List<Point>{start,start+direction*along,end});
    }else if(SiteFrame.Dot(direction,approach)>.999){
     double along=SiteFrame.Dot(d,direction);
+    if(along>margin*2&&Math.Abs(Layout.Cross(d,direction))>.01){
+     var branch=ShallowOffset(start,end,direction,.15);
+     if(branch!=null&&branch.Curves.All(c=>(c.D-end).Length>=margin)&&ClearMainBranch(branch,roads,end)&&PaintCurvedMain(branch))return true;
+    }
     if(along>margin*2)foreach(double ratio in new[]{.5,.35,.65}){
      var first=start+direction*(along*ratio);var last=end-direction*(along*(1-ratio));
      skeletons.Add(new List<Point>{start,first,last,end});
@@ -133,23 +137,26 @@ internal sealed partial class ResidentialLayout {
   foreach(double radius in new[]{desired,Math.Max(minimum,desired*.8),minimum})if(PaintCurvedMain(RoundRoute(skeleton,radius)))return true;
   return false;
  }
- bool TryShallowOffset(Point a,Point b,Point direction){
+ bool TryShallowOffset(Point a,Point b,Point direction,double leadShare=.5){
+  var route=ShallowOffset(a,b,direction,leadShare);return route!=null&&PaintCurvedMain(route);
+ }
+ PlanRoute ShallowOffset(Point a,Point b,Point direction,double leadShare){
   // A small lateral offset cannot fit two orthogonal fillets, but can fit a
   // long shallow S curve. Linear longitudinal progress prevents loops.
-  double length=SiteFrame.Dot(b-a,direction);if(length<=0)return false;
+  double length=SiteFrame.Dot(b-a,direction);if(length<=0)return null;
   var lateral=b-a-direction*length;
   double minimum=Math.Max(o.Road*.5+1,Math.Max(o.MainCurveRadius,Math.Max(o.Road*1.5,8))*CurveScale);
-  double transition=length*CurveScale,lead=(length-transition)/2;
+  double transition=length*CurveScale,lead=(length-transition)*leadShare;
   // |curvature| <= 6*offset/length^2 for this smoothstep curve.
   double radius=lateral.Length<.001?double.MaxValue:transition*transition/(6*lateral.Length);
-  if(radius<minimum)return false;
+  if(radius<minimum)return null;
   var route=new PlanRoute{Use="main",Width=o.Road};route.CornerRadii.Add(radius);
   route.Curves.Add(new PlanBezier{A=a+direction*lead,B=a+direction*(lead+transition/3),C=a+direction*(lead+transition*2/3)+lateral,D=a+direction*(lead+transition)+lateral});
   if(lead>.001)route.Points.Add(a);
   int steps=Math.Max(24,(int)Math.Ceiling((transition+1.5*lateral.Length)/cell));
   for(int i=0;i<=steps;i++){double t=(double)i/steps;route.Points.Add(a+direction*(lead+transition*t)+lateral*(t*t*(3-2*t)));}
-  if(lead>.001)route.Points.Add(b);
-  return PaintCurvedMain(route);
+  if(length-transition-lead>.001)route.Points.Add(b);
+  return route;
  }
  ArgumentException CurveFailure(int reason,int ordinal,double span){
   var error=new ArgumentException("CurveFit");
@@ -166,6 +173,7 @@ internal sealed partial class ResidentialLayout {
    // Replace the transverse 90 + 90 bend with a 45-degree connector where
    // both entrance leads and the complete curved road ribbon fit.
    double length=SiteFrame.Dot(b-a,u);var side=b-a-u*length;double offset=side.Length;
+   if(offset>0&&offset<o.MainCurveRadius&&TryShallowOffset(a,b,u))return;
    if(offset>=o.Road&&length-offset>o.Road*2){
     foreach(double fraction in new[]{.5,.35,.65,.2,.8}){
      var c=a+u*((length-offset)*fraction);var d=c+u*offset+side;

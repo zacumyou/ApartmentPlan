@@ -4,7 +4,7 @@ using System.Collections.Generic;
 namespace ApartmentPlan {
 public static class TowerLayout {
  sealed class Court {public Point Gate,Center,Forward,Side,Anchor;public double W,D;public Point[] Envelope,Stem;}
- public static Plan Generate(IList<Point> boundary,IList<Point> entries,IList<Asset> assets,LayoutOptions o,IList<ManualZone> zones){
+ public static Plan Generate(IList<Point> boundary,IList<Point> entries,IList<Asset> assets,LayoutOptions o,IList<ManualZone> zones,bool entrancesOnly=false){
   var clock=System.Diagnostics.Stopwatch.StartNew();string stage="validation";long phase=0,attempted=0,boundaryRejected=0,courtRejected=0,frontRejected=0;
   o.Observation?.Stage("validation");
   void Stage(string next){o.Observation?.Stage(next);o.Timing?.Invoke("tower."+stage,clock.ElapsedMilliseconds-phase);stage=next;phase=clock.ElapsedMilliseconds;o.Diagnostic?.Invoke("stage="+stage);}
@@ -16,7 +16,8 @@ public static class TowerLayout {
   var rules=o.TowerRules??new TowerRules();p.TowerWalkGap=rules["RoadWalkGap"];var poly=boundary.Select(p.Local).ToList();var zonesLocal=(zones??new List<ManualZone>()).Select(z=>z.Points.Select(p.Local).ToArray()).ToList();
   if(p.Area>1000000)throw new PlanLimitException("AP.LimitSiteArea",p.Area,1000000);
   var bounds=VillaGeometry.Bounds(poly);if(Math.Max(bounds.W,bounds.D)>2048)throw new PlanLimitException("AP.LimitSiteExtent",Math.Max(bounds.W,bounds.D),2048);
-  bool Fits(IList<Point> shape)=>VillaGeometry.Inside(shape,poly)&&!zonesLocal.Any(z=>VillaGeometry.Overlap(shape,z));
+  var siteBoundary=new TowerBoundary(poly);
+  bool Fits(IList<Point> shape)=>siteBoundary.Contains(shape)&&!zonesLocal.Any(z=>VillaGeometry.Overlap(shape,z));
   var courts=new List<Court>();var lots=new List<Parcel>();double width=o.ParkingAisle,radius=rules["RoadRadius"],apron=2*radius;
   PlanRoute Add(IEnumerable<PlanBezier> curves,string use,double w){var r=TowerGeometry.Route(curves,use,w);p.Routes.Add(r);return r;}
   Stage("entranceCourts");
@@ -36,6 +37,7 @@ public static class TowerLayout {
     return new[]{At(-n,b),At(n,b),At(h,s),At(h,t),At(-h,t),At(-h,s)};
    }
    var ring=TowerGeometry.Fillet(RingPoints(0),radius,true);if(ring==null)throw new ArgumentException("AP.Tower.EntranceFit");
+   if(entrancesOnly)continue;
    Add(ring,"turnaround",o.TowerTurnWidth);var mouth=At(0,bottom);Add(new[]{TowerGeometry.Line(gate,mouth)},"main",o.Road);
    // Two continuous U-shaped surfaces; no raster fragments and no unsupported hole.
    if(o.TowerEntrancePaving){
@@ -48,6 +50,7 @@ public static class TowerLayout {
     }
    }
   }
+  if(entrancesOnly)return p;
   var selected=assets.Where(a=>a.Id!=o.TowerParking.Id&&a.Width>0&&a.Depth>0).ToList();if(selected.Count==0)return p;
   double angle=rules["Angle"]*Math.PI/180;var forward=new Point(Math.Sin(angle),-Math.Cos(angle));var right=new Point(-forward.Y,forward.X);double gap=Math.Max(0,rules["BuildingGap"]-rules["GapTolerance"]),step=rules["PackingStep"];
   bool EscapeFits(Point center,Asset asset,Point[] lot,Point facing,bool boundaryOnly=false){
@@ -55,13 +58,13 @@ public static class TowerLayout {
    var mid=center+forward*(asset.Depth/2+width/2);double half=Math.Max(1,asset.Width/2-4);
    // Reject boundary-facing dead pockets before packing, not by deleting an
    // apartment after road routing fails. Other apartments remain higher priority.
-   if(TowerGeometry.Distance(mid,poly)>2*(radius+rules["FrontCurveGap"]+width))return true;
+   if(siteBoundary.Distance(mid)>2*(radius+rules["FrontCurveGap"]+width))return true;
    foreach(var arm in new[]{Tuple.Create(mid,forward),Tuple.Create(mid-right*half,right*-1),Tuple.Create(mid+right*half,right)})foreach(int sign in new[]{-1,1}){
     var turn=arm.Item1+arm.Item2*(radius+rules["FrontCurveGap"]+width);var side=new Point(-arm.Item2.Y,arm.Item2.X)*sign;
     var cs=TowerGeometry.Fillet(new[]{arm.Item1,turn,turn+side*(radius+width)},radius,false);if(cs==null)continue;
     var route=TowerGeometry.Route(cs,"aisle",width);bool clear=true;
     for(int i=1;i<route.Points.Count;i++){var a=route.Points[i-1];var b=route.Points[i];var ribbon=VillaGeometry.Box((a+b)*.5,VillaGeometry.Unit(b-a),width-.02,(b-a).Length);
-     if(!(boundaryOnly?VillaGeometry.Inside(ribbon,poly):Fits(ribbon))||VillaGeometry.Overlap(ribbon,lot)||!boundaryOnly&&courts.Any(c=>VillaGeometry.Overlap(ribbon,c.Envelope)||VillaGeometry.Overlap(ribbon,c.Stem))){clear=false;break;}}
+     if(!(boundaryOnly?siteBoundary.Contains(ribbon):Fits(ribbon))||VillaGeometry.Overlap(ribbon,lot)||!boundaryOnly&&courts.Any(c=>VillaGeometry.Overlap(ribbon,c.Envelope)||VillaGeometry.Overlap(ribbon,c.Stem))){clear=false;break;}}
     if(clear)return true;
    }return false;
   }
@@ -69,16 +72,16 @@ public static class TowerLayout {
   var candidates=new List<Parcel>();
   for(double y=bounds.Y;y<bounds.Y+bounds.D;y+=step)for(double x=bounds.X;x<bounds.X+bounds.W;x+=step){o.Cancellation.ThrowIfCancellationRequested();foreach(var a in selected){
     attempted++;var center=new Point(x,y);var original=VillaGeometry.Box(center,forward,a.Width,a.Depth);
-    if(!Fits(original)||original.Any(q=>TowerGeometry.Distance(q,poly)<rules["BuildingBoundary"]-.001)){boundaryRejected++;continue;}
+    if(!Fits(original)||original.Any(q=>siteBoundary.Distance(q)<rules["BuildingBoundary"]-.001)){boundaryRejected++;continue;}
     var originalFront=VillaGeometry.Box(center+forward*(a.Depth/2+width/2),right,width,Math.Max(2,a.Width-8));
-    bool boundaryBlocked=!VillaGeometry.Inside(originalFront,poly)||!EscapeFits(center,a,original,forward,true);
+    bool boundaryBlocked=!siteBoundary.Contains(originalFront)||!EscapeFits(center,a,original,forward,true);
     var facings=boundaryBlocked&&rules["BoundaryTurn"]>0?new[]{right,right*-1}:new[]{forward};
     // Keep the shared bearing unless the original front has no boundary escape.
     // Then try both quarter-turns at exactly the same center, preferring more room.
-    foreach(var facing in facings.OrderByDescending(f=>TowerGeometry.Distance(center+f*(a.Depth/2+width/2),poly))){
-     var lateral=new Point(-facing.Y,facing.X);var shape=VillaGeometry.Box(center,facing,a.Width,a.Depth);
-     if(!Fits(shape)||shape.Any(q=>TowerGeometry.Distance(q,poly)<rules["BuildingBoundary"]-.001)||courts.Any(c=>TowerGeometry.Distance(shape,c.Envelope)<gap||VillaGeometry.Overlap(shape,c.Stem))){courtRejected++;continue;}
-     var access=center+facing*(a.Depth/2+width/2);var front=VillaGeometry.Box(access,lateral,width,Math.Max(2,a.Width-8));
+    foreach(var facing in facings.Length==1?(IEnumerable<Point>)facings:facings.OrderByDescending(f=>siteBoundary.Distance(center+f*(a.Depth/2+width/2)))){
+     bool rotated=facings.Length>1;var lateral=new Point(-facing.Y,facing.X);var shape=rotated?VillaGeometry.Box(center,facing,a.Width,a.Depth):original;
+     if(rotated&&(!Fits(shape)||shape.Any(q=>siteBoundary.Distance(q)<rules["BuildingBoundary"]-.001))||courts.Any(c=>TowerGeometry.Distance(shape,c.Envelope)<gap||VillaGeometry.Overlap(shape,c.Stem))){courtRejected++;continue;}
+     var access=center+facing*(a.Depth/2+width/2);var front=rotated?VillaGeometry.Box(access,lateral,width,Math.Max(2,a.Width-8)):originalFront;
      if(!Fits(front)||courts.Any(c=>VillaGeometry.Overlap(front,c.Envelope)||VillaGeometry.Overlap(front,c.Stem))||!EscapeFits(center,a,shape,facing)){frontRejected++;continue;}
      candidates.Add(new Parcel{Kind=0,AssetId=a.Id,X=x-a.Width/2,Y=y-a.Depth/2,W=a.Width,D=a.Depth,Homes=a.Homes,FloorArea=(a.Footprint>0?a.Footprint:a.Width*a.Depth*o.FootprintRatio)*Math.Max(1,a.Height/o.FloorHeight),PlacementForward=facing,PlacementOutline=shape,Access=center+facing*(a.Depth/2),AccessEstimated=false});
     }
@@ -87,6 +90,18 @@ public static class TowerLayout {
   o.Observation?.Set("candidates",candidates.Count);Stage("packing");
   var packings=new List<List<Parcel>>();var packingKeys=new HashSet<string>();
   var candidateIndex=candidates.Select((q,i)=>new{q,i}).ToDictionary(x=>x.q,x=>x.i);
+  // Every candidate is either on the shared bearing or a quarter-turn
+  // from it. In that frame both footprints are axis-aligned rectangles.
+  var lotBounds=candidates.ToDictionary(q=>q,q=>VillaGeometry.Bounds(q.PlacementOutline.Select(point=>new Point(SiteFrame.Dot(point,right),SiteFrame.Dot(point,forward))).ToArray()));
+  bool TooClose(Parcel first,Parcel second){
+   var a=lotBounds[first];var b=lotBounds[second];
+   double dx=Math.Max(0,Math.Max(a.X-b.X-b.W,b.X-a.X-a.W));
+   double dy=Math.Max(0,Math.Max(a.Y-b.Y-b.D,b.Y-a.Y-a.D));
+   double threshold=gap-.001;if(threshold<=0)return false;
+   double delta=dx*dx+dy*dy-threshold*threshold;
+   if(Math.Abs(delta)>1e-7)return delta<0;
+   return TowerGeometry.Distance(first.PlacementOutline,second.PlacementOutline)<threshold;
+  }
   var candidateGroups=candidates.GroupBy(q=>q.AssetId).OrderBy(g=>g.Key,StringComparer.Ordinal).ToList();
   // Select the least-used feasible asset, then its next spatial candidate.
   // Rejected candidates never become feasible as the packing only grows, so
@@ -99,7 +114,7 @@ public static class TowerLayout {
     o.Cancellation.ThrowIfCancellationRequested();Parcel next=null;
     foreach(var group in candidateGroups.OrderBy(g=>counts.TryGetValue(g.Key,out var count)?count:0)){
      var queue=queues[group.Key];
-     while(offsets[group.Key]<queue.Length){var candidate=queue[offsets[group.Key]++];if(chosen.Any(q=>TowerGeometry.Distance(q.PlacementOutline,candidate.PlacementOutline)<gap-.001))continue;next=candidate;break;}
+     while(offsets[group.Key]<queue.Length){var candidate=queue[offsets[group.Key]++];if(chosen.Any(q=>TooClose(q,candidate)))continue;next=candidate;break;}
      if(next!=null)break;
     }
     if(next==null)break;chosen.Add(next);counts[next.AssetId]=counts.TryGetValue(next.AssetId,out var count)?count+1:1;
@@ -111,13 +126,52 @@ public static class TowerLayout {
   // A maximum-count packing is not necessarily road-connectable. Try a bounded
   // set of distinct, complete alternatives before rejecting the plan. Never
   // drop individual disconnected buildings or relax road-clearance checks.
-  foreach(var packing in packings.OrderByDescending(q=>q.Count).ThenByDescending(q=>q.Select(l=>l.AssetId).Distinct().Count()).Take(3)){
+  var trials=packings.OrderByDescending(q=>q.Select(l=>l.AssetId).Distinct().Count()).ThenByDescending(q=>q.Count).Take(3).ToList();
+  var originalTrials=new HashSet<List<Parcel>>(trials);
+  int oppositeStart=int.MaxValue,reliefAttempts=0;
+  for(int trial=0;trial<trials.Count;trial++){
+   var packing=trials[trial];
    packingAttempts++;best=packing;lots.AddRange(best);p.Parcels.AddRange(best);
    o.Diagnostic?.Invoke("packing attempt="+packingAttempts+" selected="+best.Count+" assetKinds="+best.Select(q=>q.AssetId).Distinct().Count()+" alternatives="+packings.Count);o.Observation?.Set("packed",best.Count);Stage("routing");
-   var router=new TowerRouting(p,poly,lots,courts.Select(c=>c.Stem).Concat(zonesLocal).ToList(),right,forward,o,rules);
-   foreach(var court in courts)router.Anchors.Add(court.Anchor);
+   var router=new TowerRouting(p,poly,lots,courts.Select(c=>c.Stem).Concat(zonesLocal).ToList(),right,forward,o,rules,siteBoundary);
+   foreach(var court in courts)router.Anchors.Add(trial>=oppositeStart?court.Center+court.Side*(court.W/2+radius):court.Anchor);
    try{router.Build(best);routingFailure=null;break;}
    catch(ArgumentException e) when(e.Message=="AP.Tower.RoutingRetryFit"){
+    // Move the repeatedly blocked frontage within the same packing. Keep
+    // the asset mix, orientation options, lot count and original spacing.
+    if(trial<oppositeStart&&originalTrials.Contains(packing)&&router.FailedFrontages.Count>0){
+     var failed=router.FailedFrontages.OrderByDescending(item=>item.Value).First().Key;
+     var others=packing.Where(q=>q!=failed).ToList();
+     var alternative=candidateGroups.First(g=>g.Key==failed.AssetId)
+      .Where(q=>q!=failed&&!others.Any(l=>TooClose(q,l)))
+      .OrderBy(q=>(q.Access.Value-failed.Access.Value).Length)
+      .FirstOrDefault(q=>(q.Access.Value-failed.Access.Value).Length>=width+radius);
+     if(alternative!=null){
+      var repaired=packing.Select(q=>q==failed?alternative:q).ToList();
+      string key=string.Join(",",repaired.Select(q=>candidateIndex[q]).OrderBy(i=>i));
+      if(packingKeys.Add(key))trials.Insert(trial+1,repaired);
+     }
+    }
+    if(trial==trials.Count-1&&oppositeStart==int.MaxValue){
+     oppositeStart=trials.Count;trials.Add(trials[0]);
+     // Include independent sweep directions after the dense arrangements
+     // fail. These are complete packings evaluated with identical rules.
+     var tested=new HashSet<Parcel>(originalTrials.SelectMany(q=>q));
+     trials.AddRange(packings.Where(q=>!originalTrials.Contains(q))
+      .OrderByDescending(q=>q.Select(l=>l.AssetId).Distinct().Count())
+      .ThenBy(q=>q.Count(l=>tested.Contains(l))/(double)Math.Max(1,q.Count))
+      .ThenByDescending(q=>q.Count).Take(2));
+    }
+    // After full-density alternatives fail, free one blocked frontage at
+    // a time. Retain every represented asset and rebuild the entire network.
+    if(trial==trials.Count-1&&candidateGroups.Count>1&&reliefAttempts<2){
+     var counts=packing.GroupBy(q=>q.AssetId).ToDictionary(g=>g.Key,g=>g.Count());
+     var blocked=router.FailedFrontages.Where(item=>counts.TryGetValue(item.Key.AssetId,out var n)&&n>1)
+      .OrderByDescending(item=>item.Value).Select(item=>item.Key).FirstOrDefault();
+     if(blocked!=null&&packing.Contains(blocked)){
+      trials.Add(packing.Where(q=>q!=blocked).ToList());reliefAttempts++;
+     }
+    }
     routingFailure=e;lots.RemoveAll(q=>best.Contains(q));p.Parcels.RemoveAll(q=>best.Contains(q));p.Routes.RemoveRange(routeBase,p.Routes.Count-routeBase);
    }
   }

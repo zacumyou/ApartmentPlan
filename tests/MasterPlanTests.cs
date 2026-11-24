@@ -36,7 +36,8 @@ static class MasterPlanTests {
   Geometry(Layout.Generate(site,new[]{entries[1],entries[0]},assets,o,null,null));
   var clockwise=site.Reverse().ToArray();var frame=Layout.Frame(clockwise,entries[0]);Check(Math.Abs(SiteFrame.Dot(frame.Right,p.Right))>.999,"common axis survives boundary winding");
   var zones=new[]{new ManualZone{Kind=5,Points=new List<Point>{new Point(105,65),new Point(148,65),new Point(148,135),new Point(105,135)}},new ManualZone{Kind=4,Points=new List<Point>{new Point(10,150),new Point(35,150),new Point(35,180),new Point(10,180)}}};
-  var reserved=Layout.Generate(site,entries,assets,o,null,zones);Geometry(reserved);
+  // This fixture explicitly checks six metres, independently of the game default.
+  var reserved=Layout.Generate(site,entries,assets,new LayoutOptions{MainParkingSetback=6},null,zones);Geometry(reserved);
   var buildings=reserved.Parcels.Where(r=>r.Kind==0).ToList();
   var courts=reserved.Courts;
   Check(courts.Count>=2&&courts.All(c=>c.Parking.Count>0),"each accepted group includes its parking court");

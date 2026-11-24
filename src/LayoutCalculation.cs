@@ -29,6 +29,7 @@ public partial class PlanSystem {
   if(!catalogReady||CatalogLoading){Status="AP.CatalogLoading";Revision++;return;}
   EntranceLength=Mod.Options.EntranceLength;ReplacementIndex=-1;CancelLayout();LayoutOutdated=true;
   if(Entrances.Count==0||!Layout.Valid(Boundary)){Draft=null;Preview.Clear();LayoutOutdated=false;Status=Mode=="entrance"?"AP.PickEntrance":"AP.Draw";Revision++;return;}
+  if(!Villa&&!Layout.HasHousingAsset(Assets.Where(a=>Selected.Contains(a.Id)),Tower,Mod.Options.TowerParkingAsset)){Draft=null;Preview.Clear();Status="AP.SelectAssets";Revision++;return;}
   if(!World.GetOrCreateSystemManaged<InvisibleRoadPrefabs>().Available){Status="AP.RoadPackMissing";Revision++;return;}
   var existingVillaRoads=Villa?CollectVillaExistingRoads():new List<PlanRoute>();
   // Missing initialization must never silently turn into mismatched widths
@@ -66,7 +67,7 @@ public partial class PlanSystem {
    if(Trace.Detailed)try{Directory.CreateDirectory(folder);File.WriteAllText(Path.Combine(folder,"layout-last-input.json"),json);}catch{}
    var watch=System.Diagnostics.Stopwatch.StartNew();
    Plan result;
-   try{result=Layout.Generate(input.Boundary,input.Entrances,input.Assets,input.Options,input.Ramps,input.Zones,input.Roads);token.ThrowIfCancellationRequested();}
+   try{result=Layout.GenerateHousing(input.Boundary,input.Entrances,input.Assets,input.Options,input.Ramps,input.Zones,input.Roads);token.ThrowIfCancellationRequested();}
    catch(Exception error){input.Options.Timing?.Invoke(error is OperationCanceledException?"cancelled":"failed",watch.ElapsedMilliseconds);throw;}
    finally{
     watch.Stop(); // Exclude aggregate log output from calculation wall time.
@@ -106,7 +107,7 @@ public partial class PlanSystem {
    if(error is ArgumentException roadError&&error.Message=="ManualRoadFit")RecordManualRoadFailure(roadError);
    Trace.Failure("layout.rejected",error);rejected?.Invoke();LayoutOutdated=rejected==null;Draft=layoutPrevious;Preview.Clear();if(Draft!=null)RenderDraft();
    if(error is PlanLimitException limit)SetLimit(limit.Status,limit.Current,limit.Maximum);
-   else Status=error is ArgumentException?(error.Message.StartsWith("AP.Tower.",StringComparison.Ordinal)?error.Message:error.Message=="ManualRoadFit"?"AP.ManualRoadFit":error.Message=="EntranceFit"||error.Message=="EntranceSpacing"?"AP.EntranceFit":error.Message=="CurveFit"?"AP.CurveFit":error.Message=="DisconnectedEntrance"?"AP.DisconnectedEntrance":error.Message=="ZoneFit"?"AP.ZoneFit":error.Message=="RampFit"?"AP.RampFit":"AP.InvalidBoundary"):"AP.Error";
+   else Status=error is ArgumentException?((error.Message.StartsWith("AP.Tower.",StringComparison.Ordinal)||error.Message=="AP.SelectAssets")?error.Message:error.Message=="ManualRoadFit"?"AP.ManualRoadFit":error.Message=="EntranceFit"||error.Message=="EntranceSpacing"?"AP.EntranceFit":error.Message=="CurveFit"?"AP.CurveFit":error.Message=="DisconnectedEntrance"?"AP.DisconnectedEntrance":error.Message=="ZoneFit"?"AP.ZoneFit":error.Message=="RampFit"?"AP.RampFit":"AP.InvalidBoundary"):"AP.Error";
   }else{
    failedLayoutInput=null;failedLayoutStatus=null;layoutReasons.Clear();LayoutOutdated=false;Draft=result;RenderDraft();Status=PlanDiagnostics.Status(Draft,Selected.Count>0,Villa);
    if(Status=="AP.LimitParcelsTrimmed")SetLimit(Status,Draft.RequestedParcels,Draft.ParcelLimit);

@@ -66,9 +66,11 @@ public partial class PlanSystem {
    var expected=p.Mode;p.boundaryRedo.Add(new Point(9,0));
    if(auto&&!p.Mod.Options.AutoCalculate)p.ChangeAutoCalculation();
    if(p.LayoutPending)Expect(!p.CanReviewLayout,"pending tab accepted layout review");
+   bool sharesSite=p.Draft!=null;
    p.SwitchPlanMode(via);
    Expect(p.compoundFullDraft==null&&p.treePlan==null&&p.treeKey==null&&!p.LandscapeOpen&&p.ReplacementIndex<0,"new tab kept transient tools");
-   Expect(p.Mode=="boundary"&&p.Draft==null&&!p.LayoutPending&&!p.NativeAuditAvailable,"new tab inherited draft");
+   Expect(p.Mode==(sharesSite?"entrance":"boundary")&&p.Boundary.Count==(sharesSite?3:0)&&p.Draft==null&&!p.LayoutPending&&!p.NativeAuditAvailable,"incorrect site transfer");
+   if(sharesSite)Expect(p.Elevation==27&&p.Entrances.Count==1&&p.EditingPlan<0,"lost site elevation or entrance, or inherited save identity");
    p.EditingPlan=82;p.ZonePoints.Add(new Point(3,4));p.Elevation=11;
    if(removal=="suspended")p.ForgetDemolishedPlan(81);
    if(removal=="active")p.ForgetDemolishedPlan(82);
