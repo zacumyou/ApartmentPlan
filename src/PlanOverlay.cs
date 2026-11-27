@@ -46,7 +46,7 @@ public partial class PlanOverlay:GameSystemBase {
    bool editing=s.Open&&p.Info.Number==s.EditingPlan;if(!o.ShowSaved&&!editing)continue;if(editing&&drawDraft)continue;
    bool active=p.Info.Number==s.HoverPlan||p.Info.Number==s.SelectedPlan;
    bool built=s.IsBuilt(p);
-   if(!built){foreach(var shape in p.Shapes)if(p.Edit?.Draft?.Villa!=true||shape.Kind!=0)Draw(buffer,shape,active?Mathf.Max(.9f,o.SavedOpacity):o.SavedOpacity,o.ViewDistance);if(p.Edit?.Draft?.Villa==true)DrawVillaLots(buffer,p.Edit.Draft,p.Shapes.Count>0?p.Shapes[0].A.y:s.Elevation,o.ViewDistance);DrawTrees(buffer,p.TreePreview,s,o.ViewDistance);DrawLabels(overlay,s,p.Edit?.Draft,camera,o.SavedOpacity);}
+   if(!built&&InView(p.BoundsMin,p.BoundsMax,32,o.ViewDistance)){foreach(var shape in p.Shapes)if(p.Edit?.Draft?.Villa!=true||shape.Kind!=0)Draw(buffer,shape,active?Mathf.Max(.9f,o.SavedOpacity):o.SavedOpacity,o.ViewDistance);if(p.Edit?.Draft?.Villa==true)DrawVillaLots(buffer,p.Edit.Draft,p.Shapes.Count>0?p.Shapes[0].A.y:s.Elevation,o.ViewDistance);DrawTrees(buffer,p.TreePreview,s,o.ViewDistance);DrawLabels(overlay,s,p.Edit?.Draft,camera,o.SavedOpacity);}
    if(active)foreach(var shape in p.Shapes)if(shape.Kind==7&&Mathf.Abs(shape.Width-.5f)<.001f){var edge=shape;edge.Width=1.2f;Draw(buffer,edge,1,o.ViewDistance);}
   }
   if(drawDraft){foreach(var shape in s.Preview)if(!s.Draft.Villa||shape.Kind!=0)Draw(buffer,shape,o.EditOpacity,o.ViewDistance);if(s.Draft.Villa)DrawVillaLots(buffer,s.Draft,s.Elevation,o.ViewDistance);
@@ -86,9 +86,3 @@ public partial class PlanOverlay:GameSystemBase {
   if(shape.Kind==7&&shape.Width<.2f&&(!DetailVisible(shape.Width,(shape.A+shape.B)*.5f,.75f)||!DetailVisible(math.distance(shape.A,shape.B),(shape.A+shape.B)*.5f,3)))return;if(!InView(shape.A,shape.B,shape.Width,distance))return;var color=colors[shape.Kind];color.a=math.clamp(opacity,0,1);if(measuring)submittedCount++;buffer.DrawLine(color,color,0,OverlayRenderSystem.StyleFlags.Projected,new Line3.Segment(shape.A,shape.B),shape.Width,new float2(0));}
 }
 }
-
-
-
-
-
-

@@ -4,6 +4,11 @@ using System.Linq;
 using ApartmentPlan;
 static class NetworkReplacementTests {
  public static void Run(){
+  if(NetworkReplacementPolicy.BlocksPlacement(false,false,false)||NetworkReplacementPolicy.BlocksPlacement(false,true,true)||
+     !NetworkReplacementPolicy.BlocksPlacement(true,false,true)||!NetworkReplacementPolicy.BlocksPlacement(false,true,false))
+   throw new Exception("Placement deletion classification failed");
+  Console.WriteLine("PASS ancillary deletion and retained edges allowed; building and unreplaced edge loss blocked");
+
   FrameWorkTests.Run();
   var connected=NetworkReplacementPolicy.ConnectedComponent(1,new List<Tuple<int,int>>{Tuple.Create(1,2),Tuple.Create(2,3),Tuple.Create(3,4),Tuple.Create(8,9)});
   if(!connected.Contains(4)||connected.Contains(8))throw new Exception("ground chain endpoint identity");
@@ -115,4 +120,3 @@ static class NetworkReplacementTests {
   Console.WriteLine("PASS scoped road children allowed; foreign objects, buildings and their children, missing roots, owner cycles and unreplaced nodes blocked. Synthetic ownership fixture, not game preview.");
  }
 }
-

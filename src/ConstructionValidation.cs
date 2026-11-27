@@ -76,9 +76,22 @@ public partial class ConstructionTool {
   temps.CompleteDependency();
   using(var entities=temps.ToEntityArray(Allocator.Temp)){
    var roots=NetworkReplacementRoots(entities);Metrics["PreviewTempCount"]=entities.Length;Metrics["ReplacementRoots"]=roots.Count;Metrics["SubmittedCourses"]=submittedCourses.Count;Metrics["SubmittedConnections"]=submittedConnections.Count;
+   var survivors=new List<Entity>();
+   foreach(var candidate in entities){
+    if((EntityManager.GetComponentData<Temp>(candidate).m_Flags&TempFlags.Delete)==0&&EntityManager.HasComponent<Game.Net.Edge>(candidate)&&EntityManager.HasComponent<Game.Net.Curve>(candidate)&&EntityManager.HasComponent<PrefabRef>(candidate))survivors.Add(candidate);
+   }
+   var vetoed=new HashSet<Entity>();
    foreach(var e in entities){var t=EntityManager.GetComponentData<Temp>(e);
     if(EntityManager.HasComponent<Error>(e)){errors++;TraceErrors(e);}
-    if(t.m_Original!=Entity.Null&&(t.m_Flags&TempFlags.Delete)!=0){if(IsNetworkReplacement(t.m_Original,roots))replacements++;else {blocked++;Evidence(t.m_Original,1,(int)t.m_Flags);WarningEntity(t.m_Original);warningNotice="AP.Warning.Protected";}}
+    if(t.m_Original!=Entity.Null&&(t.m_Flags&TempFlags.Delete)!=0){
+     var original=t.m_Original;
+     bool building=EntityManager.HasComponent<Game.Buildings.Building>(original);
+     bool edge=EntityManager.HasComponent<Game.Net.Edge>(original);
+     bool replaced=edge&&(IsNetworkReplacement(original,roots)||CoversRoadBySurvivors(original,survivors));
+     if(NetworkReplacementPolicy.BlocksPlacement(building,edge,replaced)){
+      blocked++;vetoed.Add(original);Evidence(original,1,(int)t.m_Flags);WarningEntity(original);warningNotice="AP.Warning.Protected";
+     }else if(replaced)replacements++;
+    }
     if(EntityManager.HasComponent<Game.Net.Edge>(e))edges++;
     if(t.m_Original==Entity.Null&&(t.m_Flags&TempFlags.Delete)==0&&EntityManager.HasComponent<Game.Buildings.Building>(e)&&EntityManager.HasComponent<Game.Objects.Transform>(e)&&EntityManager.HasComponent<PrefabRef>(e))
     {var transform=EntityManager.GetComponentData<Game.Objects.Transform>(e);var position=transform.m_Position;
@@ -86,7 +99,7 @@ public partial class ConstructionTool {
 
    }
    Trace.Event("construction.deletion.classified","networkReplacements="+replacements+" blocked="+blocked+" scopedRoots="+roots.Count);
-   if(blocked>0)TraceBlockedDeletions(entities,blocked,roots);
+   if(blocked>0)TraceBlockedDeletions(entities,blocked,vetoed);
   }
   Metrics["Edges"]=edges;Metrics["Errors"]=errors;Metrics["BlockedDeletions"]=blocked;Metrics["NetworkReplacements"]=replacements;
   if(blocked>0){Metrics["FailureFlags"]=1;result.Detail="Native operation would delete an existing object; blocked="+blocked+" (see construction.deletion.* log)";yield break;}

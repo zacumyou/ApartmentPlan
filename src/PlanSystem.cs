@@ -10,7 +10,15 @@ using Unity.Collections;
 using Unity.Entities;
 using Unity.Mathematics;
 namespace ApartmentPlan {
-public sealed class StoredPlan {public bool Hidden;internal bool TreePreviewReady;internal readonly List<PlannedTree> TreePreview=new List<PlannedTree>();public Entity Entity;public SavedPlan Info;public PlanEditData Edit;public List<PlanShape> Shapes=new List<PlanShape>();}
+public sealed class StoredPlan {public bool Hidden;internal bool TreePreviewReady;internal readonly List<PlannedTree> TreePreview=new List<PlannedTree>();public Entity Entity;public SavedPlan Info;internal System.Func<PlanEditData> LoadEdit;
+ internal PlanEditSummary Summary;internal PlanEditData CachedEdit;
+ public PlanEditData Edit{
+  get{if(LoadEdit!=null){CachedEdit=LoadEdit();LoadEdit=null;}return CachedEdit;}
+  set{CachedEdit=value;LoadEdit=null;Summary=PlanEditSummary.From(value);}
+ }
+ internal List<Point> HitBoundary;internal bool BoundaryEditable;
+ internal float3 BoundsMin,BoundsMax;
+ public List<PlanShape> Shapes=new List<PlanShape>();}
 public partial class PlanSystem:GameSystemBase {
  readonly List<Point> boundaryRedo=new List<Point>();
  readonly List<Action> entranceRedo=new List<Action>();
@@ -54,7 +62,10 @@ public partial class PlanSystem:GameSystemBase {
   if(count>0){EntityManager.DestroyEntity(savedQuery);Trace.Event("restore.previousWorldReleased","plans="+count,true);}
  }
  protected override void OnGameLoadingComplete(Purpose purpose,GameMode mode){Trace.Event("load.complete.begin","purpose="+purpose+" mode="+mode);base.OnGameLoadingComplete(purpose,mode);diagnosticShareGeneration++;diagnosticShareDialog=false;pendingReport=null;Ready=mode==GameMode.Game;if(Ready)Catalog();EntranceLength=Mod.Options?.EntranceLength??15;LoadSaved();RestoreGrowableProtection();foreach(var p in Saved)if(IsBuilt(p))QueueStoredAudit(p.Info.Number);Revision++;Trace.Event("load.complete.end","ready="+Ready+" plans="+Saved.Count);}
- void LoadSaved(){Trace.Event("restore.begin");Saved.Clear();using(var entities=savedQuery.ToEntityArray(Allocator.Temp)){foreach(var e in entities){var info=EntityManager.GetComponentData<SavedPlan>(e);if(info.Version!=1&&info.Version!=2){Trace.Event("restore.unsupported","version="+info.Version);Mod.Log.Warn("Unsupported plan version: "+info.Version);continue;}var b=EntityManager.GetBuffer<PlanShape>(e,true);var stored=new StoredPlan{Entity=e,Info=info,Hidden=EntityManager.HasComponent<PlanListState>(e)&&EntityManager.GetComponentData<PlanListState>(e).Hidden!=0};for(int i=0;i<b.Length&&i<PlanLimits.TotalShapes;i++){var s=b[i];if(math.all(math.isfinite(s.A))&&math.all(math.isfinite(s.B))&&math.isfinite(s.Width)&&s.Width>0&&s.Width<1000&&s.Kind>=0&&s.Kind<=10)stored.Shapes.Add(s);}stored.Edit=ReadEdit(e);Saved.Add(stored);Trace.Event("restore.plan","id="+info.Number+" accepted="+stored.Shapes.Count+" source="+b.Length);}}var duplicateGroups=Saved.GroupBy(p=>p.Info.Number).Count(g=>g.Count()>1);if(duplicateGroups>0){Trace.Event("restore.duplicateNumbers","groups="+duplicateGroups+" plans="+Saved.Count+" preserved=true",true);Mod.Log.Warn("Duplicate saved plan numbers: "+duplicateGroups+" groups; metadata preserved.");}Trace.Event("restore.end","plans="+Saved.Count);}
+ void LoadSaved(){Trace.Event("restore.begin");Saved.Clear();using(var entities=savedQuery.ToEntityArray(Allocator.Temp)){foreach(var e in entities){var info=EntityManager.GetComponentData<SavedPlan>(e);if(info.Version!=1&&info.Version!=2){Trace.Event("restore.unsupported","version="+info.Version);Mod.Log.Warn("Unsupported plan version: "+info.Version);continue;}Saved.Add(RestoreStored(e,info));}}var duplicateGroups=Saved.GroupBy(p=>p.Info.Number).Count(g=>g.Count()>1);if(duplicateGroups>0){Trace.Event("restore.duplicateNumbers","groups="+duplicateGroups+" plans="+Saved.Count+" preserved=true",true);Mod.Log.Warn("Duplicate saved plan numbers: "+duplicateGroups+" groups; metadata preserved.");}RebuildPickIndex();Trace.Event("restore.end","plans="+Saved.Count);}
+ StoredPlan RestoreStored(Entity e,SavedPlan info){
+  var b=EntityManager.GetBuffer<PlanShape>(e,true);var stored=new StoredPlan{Entity=e,Info=info,Hidden=EntityManager.HasComponent<PlanListState>(e)&&EntityManager.GetComponentData<PlanListState>(e).Hidden!=0};for(int i=0;i<b.Length&&i<PlanLimits.TotalShapes;i++){var s=b[i];if(math.all(math.isfinite(s.A))&&math.all(math.isfinite(s.B))&&math.isfinite(s.Width)&&s.Width>0&&s.Width<1000&&s.Kind>=0&&s.Kind<=10)stored.Shapes.Add(s);}int sourceCount=b.Length;RestoreEdit(stored);Trace.Event("restore.plan","id="+info.Number+" accepted="+stored.Shapes.Count+" source="+sourceCount);return stored;
+ }
  void ReadPedestrianAccess(Entity prefab,float3 position,quaternion rotation,List<Point> points,int depth){
   if(depth>8||!EntityManager.HasBuffer<Game.Prefabs.SubObject>(prefab))return;
   foreach(var sub in EntityManager.GetBuffer<Game.Prefabs.SubObject>(prefab,true)){
@@ -264,60 +275,15 @@ public partial class PlanSystem:GameSystemBase {
   RememberBuildingAsset(id);Mod.Options.ApplyAndSave();
   Draft.Parcels[ReplacementIndex]=replacement;Draft.Homes+=replacement.Homes-old.Homes;Draft.Far=Draft.Parcels.Where(r=>r.Kind==0).Sum(r=>r.FloorArea)/Draft.Area*100;Draft.Shortfall[0]=Math.Max(0,Draft.Homes*Mod.Options.ParkingPerHome-Draft.Parcels.Sum(r=>r.ParkingSpaces));RenderDraft();Status="AP.Replaced";Trace.Event("building.replaced",id);
  }
- bool Save(bool keepDraft=false){if(!catalogReady||CatalogLoading||RoadPoints.Count>0||LayoutPending||LayoutOutdated)return false;Trace.Event("save.begin","shapes="+Preview.Count+" plans="+Saved.Count);if(Draft==null||!Draft.Parcels.Any(p=>p.Kind==0)){Status="AP.NeedBuildings";return false;}if(Draft.Villa&&(Draft.RequiredAccessFailures>0)){Status="AP.Villa.NoConnection";return false;}var expired=EditingPlan<0?PlanDeletionPolicy.OldestForNewPlan(Saved.Where(p=>!p.Hidden),PlanLimits.SavedPlans,p=>p.Info.Number,p=>CanDeleteTarget(p.Info.Number)&&!HasOwnedObjects(p)&&!IsBuilt(p)&&p.Edit?.Pending==null):new List<StoredPlan>();if(EditingPlan<0&&Saved.Count(p=>!p.Hidden)-expired.Count>=PlanLimits.SavedPlans){SetLimit("AP.LimitSavedPlans",Saved.Count(p=>!p.Hidden)+1,PlanLimits.SavedPlans);return false;}int draftShapes=Preview.Count+Boundary.Count;if(draftShapes>PlanLimits.TotalShapes){SetLimit("AP.LimitSinglePlanShapes",draftShapes,PlanLimits.TotalShapes);return false;}
+ bool Save(bool keepDraft=false){if(!catalogReady||CatalogLoading||RoadPoints.Count>0||LayoutPending||LayoutOutdated)return false;Trace.Event("save.begin","shapes="+Preview.Count+" plans="+Saved.Count);if(Draft==null||!Draft.Parcels.Any(p=>p.Kind==0)){Status="AP.NeedBuildings";return false;}if(Draft.Villa&&(Draft.RequiredAccessFailures>0)){Status="AP.Villa.NoConnection";return false;}var expired=EditingPlan<0?PlanDeletionPolicy.OldestForNewPlan(Saved.Where(p=>!p.Hidden),PlanLimits.SavedPlans,p=>p.Info.Number,p=>CanDeleteTarget(p.Info.Number)&&!HasOwnedObjects(p)&&!IsBuilt(p)&&p.Summary?.Pending!=true):new List<StoredPlan>();if(EditingPlan<0&&Saved.Count(p=>!p.Hidden)-expired.Count>=PlanLimits.SavedPlans){SetLimit("AP.LimitSavedPlans",Saved.Count(p=>!p.Hidden)+1,PlanLimits.SavedPlans);return false;}int draftShapes=Preview.Count+Boundary.Count;if(draftShapes>PlanLimits.TotalShapes){SetLimit("AP.LimitSinglePlanShapes",draftShapes,PlanLimits.TotalShapes);return false;}
   if(SaveCompoundPending())return true;
-  var editBytes=CaptureEdit();var existing=Saved.Find(p=>p.Info.Number==EditingPlan);int number=existing?.Info.Number??(Saved.Count==0?1:Saved.Max(s=>s.Info.Number)+1);var namedEdit=PlanEditCodec.Decode(editBytes);namedEdit.Name=existing?.Edit?.Name??NewPlanName(number);editBytes=PlanEditCodec.Encode(namedEdit);Entity e=existing?.Entity??EntityManager.CreateEntity();var info=new SavedPlan{Version=2,Number=number,Area=(float)Draft.Area,Far=(float)Draft.Far,Homes=Draft.Homes};if(existing==null)EntityManager.AddComponentData(e,info);else EntityManager.SetComponentData(e,info);if(!EntityManager.HasBuffer<PlanEditByte>(e))EntityManager.AddBuffer<PlanEditByte>(e);var editBuffer=EntityManager.GetBuffer<PlanEditByte>(e);editBuffer.Clear();foreach(var v in editBytes)editBuffer.Add(new PlanEditByte{Value=v});if(!EntityManager.HasBuffer<PlanShape>(e))EntityManager.AddBuffer<PlanShape>(e);var buf=EntityManager.GetBuffer<PlanShape>(e);buf.Clear();foreach(var s in Preview)buf.Add(s);
+  var editBytes=CaptureEdit();var existing=Saved.Find(p=>p.Info.Number==EditingPlan);int number=existing?.Info.Number??(Saved.Count==0?1:Saved.Max(s=>s.Info.Number)+1);var namedEdit=PlanEditCodec.Decode(editBytes);namedEdit.Name=existing?.Summary?.Name??NewPlanName(number);editBytes=PlanEditCodec.Encode(namedEdit);var archive=PlanArchive.Encode(namedEdit,editBytes);Entity e=existing?.Entity??EntityManager.CreateEntity();var info=new SavedPlan{Version=2,Number=number,Area=(float)Draft.Area,Far=(float)Draft.Far,Homes=Draft.Homes};if(existing==null)EntityManager.AddComponentData(e,info);else EntityManager.SetComponentData(e,info);WriteArchive(e,archive);if(!EntityManager.HasBuffer<PlanShape>(e))EntityManager.AddBuffer<PlanShape>(e);var buf=EntityManager.GetBuffer<PlanShape>(e);buf.Clear();foreach(var s in Preview)buf.Add(s);
   for(int i=0;i<Boundary.Count;i++){var a=Boundary[i];var b=Boundary[(i+1)%Boundary.Count];buf.Add(new PlanShape{A=new float3((float)a.X,Elevation,(float)a.Y),B=new float3((float)b.X,Elevation,(float)b.Y),Width=.5f,Kind=7});}
   // Evict metadata only after the replacement has been completely written. Never delete built/owned plans.
-  foreach(var old in expired){if(EntityManager.Exists(old.Entity)&&CanDeleteTarget(old.Info.Number)&&!HasOwnedObjects(old)&&!IsBuilt(old)&&old.Edit?.Pending==null){EntityManager.DestroyEntity(old.Entity);ForgetCachedPlan(old.Info.Number);if(SelectedPlan==old.Info.Number)SelectedPlan=-1;if(HoverPlan==old.Info.Number)HoverPlan=-1;Trace.Event("plan.retention.removed","id="+old.Info.Number+" replacement="+number);}}
-  LoadSaved();if(keepDraft){EditingPlan=number;return true;}ForgetCachedPlan(number);ResetPlanningInputs();Status="AP.Saved";InspectPlan(number);Trace.Event("save.complete","id="+number+" area="+info.Area+" far="+info.Far+" shapes="+Saved.Find(p=>p.Info.Number==number).Shapes.Count);Mod.Log.Info("Plan saved to city metadata: "+number);
+  foreach(var old in expired){if(EntityManager.Exists(old.Entity)&&CanDeleteTarget(old.Info.Number)&&!HasOwnedObjects(old)&&!IsBuilt(old)&&old.Summary?.Pending!=true){EntityManager.DestroyEntity(old.Entity);Saved.Remove(old);ForgetCachedPlan(old.Info.Number);if(SelectedPlan==old.Info.Number)SelectedPlan=-1;if(HoverPlan==old.Info.Number)HoverPlan=-1;Trace.Event("plan.retention.removed","id="+old.Info.Number+" replacement="+number);}}
+  var replacement=RestoreStored(e,info);if(existing==null)Saved.Add(replacement);else Saved[Saved.IndexOf(existing)]=replacement;RebuildPickIndex();if(keepDraft){EditingPlan=number;return true;}ForgetCachedPlan(number);ResetPlanningInputs();Status="AP.Saved";InspectPlan(number);Trace.Event("save.complete","id="+number+" area="+info.Area+" far="+info.Far+" shapes="+Saved.Find(p=>p.Info.Number==number).Shapes.Count);Mod.Log.Info("Plan saved to city metadata: "+number);
   return true;
  }
  internal string State()=>JsonConvert.SerializeObject(new{boundaryValid=Layout.Valid(Boundary),canReviewLayout=CanReviewLayout,canRedo=Mode=="boundary"?boundaryRedo.Count>0:Mode=="entrance"&&entranceRedo.Count>0,hasDraft=Draft!=null,canForceBuilding=CanForceBuilding,buildingEditor=Mode=="replace"&&ReplacementIndex>=0&&Draft!=null&&ReplacementIndex<Draft.Parcels.Count?new{x=ReplacementScreenX,y=ReplacementScreenY,current=Draft.Parcels[ReplacementIndex].AssetId}:null,recentNetworks=Mod.Options.RecentNetworksJson,autoCalculate=Mod.Options.AutoCalculate,layoutOutdated=LayoutOutdated,generateSurfaceParking=Mod.Options.GenerateSurfaceParking,parkingInOpenSpace=Mod.Options.ParkingInOpenSpace,compoundEditing=CompoundEditing,canForceDemolition=World.GetExistingSystemManaged<ToolSystem>()?.activeTool is ConstructionTool forceTool&&forceTool.CanForceDemolition,canDeleteAllPlans=CanDeleteAllPlans,migration=MigrationState(),fillRadius=FillRadius,canFill=CanFill,recentBuildingAssets=Mod.Options.RecentBuildingAssetsJson,entranceClose=Mode=="entrance"&&!Villa&&EntranceSpacing.HasClosePair(Entrances),tower=TowerState(),villaCentralRoad=Mod.Options.VillaCentralRoad,villaExistingRoadsOnly=Draft?.VillaExistingRoadsOnly??false,villaRoadDensity=Draft?.VillaRoadDensity??0,villaFollowBoundary=Mod.Options.VillaFollowBoundary,planMode=Mod.Options.PlanMode,villaMesh=Mod.Options.VillaMesh,villaGap=Mod.Options.VillaGap,villaReduction=Mod.Options.VillaReduction,villaMainSpacing=Mod.Options.VillaMainSpacing,villaRows=Mod.Options.VillaRows,villaMaxBuildings=Mod.Options.VillaMaxBuildings,villaBoundary=Mod.Options.VillaBoundary,villaSetback=Mod.Options.VillaSetback,villaConnectionDistance=Mod.Options.VillaConnectionDistance,villaConnections=VillaConnections.Select(c=>new{c.Side,c.Junction,c.Disabled}),limit=LimitInfo,grassSurfaces=Mod.Options.GrassSurfaces,nativeProgress=NativeBusy?World.GetExistingSystemManaged<ConstructionTool>()?.Progress:null,nativeBusy=NativeBusy||replacementPlan>=0&&(demolitionCountdown>0||replacementPreviewFrames>0),buildingPattern=Mod.Options.BuildingPattern,mainTJunctions=Mod.Options.AllowMainTJunctions,layoutReasons=LayoutPending?null:layoutReasons,statusError=StatusError,diagnosticCopyState,diagnosticShareStatus,diagnosticShareBusy=diagnosticShareDialog||diagnosticShareTask!=null,catalogLoading=CatalogLoading,catalogCount=catalogProcessed,lotTiles=Villa?Mod.Options.VillaTileLots:Mod.Options.TileBuildingLots,surfaceRadius=Mod.Options.SurfaceCornerRadius,landscape=LandscapeState(),canDelete=CanDeleteCurrent,deleteReason=DeletionReason(CurrentDeletionTarget),mainSetback=Mod.Options.MainParkingSetback,boundaryMargin=Mod.Options.BoundaryGreenMargin,population=EstimatedPopulation,householdAverage=HouseholdAverage,calculating=LayoutPending,roadCurved=RoadCurved,roadPoints=RoadPoints.Count,pendingRoads=RoadDraft.Roads.Count,roads=Roads.Count,nativeDemolition=World.GetExistingSystemManaged<ConstructionTool>()?.Demolishing??false,inspector=StoredSummary(SelectedStored),editingPlan=EditingPlan,curveRadius=Mod.Options.MainRoadCurveRadius,curveLength=Mod.Options.MainRoadCurveLengthPercent,lineOverlap=Mod.Options.ParkingLineOverlap,parkingPitch=ParkingPitch,decalGap=Mod.Options.ParkingDecalGap,parkingGreen=Mod.Options.ParkingGreenIslands,parkingGreenWidth=Mod.Options.ParkingIslandWidth,networks=Networks,mainNetwork=Mod.Options.MainNetwork,aisleNetwork=Villa?"Alley":Mod.Options.AisleNetwork,walkNetwork=Mod.Options.WalkNetwork,nativeActive=World.GetExistingSystemManaged<ToolSystem>()?.activeTool is ConstructionTool,nativeValid=World.GetExistingSystemManaged<ConstructionTool>()?.Valid??false,nativeReport=HasCurrentNativeReport?World.GetExistingSystemManaged<ConstructionTool>()?.Report??"":"",nativeMetrics=HasCurrentNativeReport?World.GetExistingSystemManaged<ConstructionTool>()?.Metrics:null,nativeNotice=HasCurrentNativeReport?World.GetExistingSystemManaged<ConstructionTool>()?.Notice??"":"",nativeCommitted=NativeCommitted,nativeAuditAvailable=NativeAuditAvailable,cornerMode=Mod.Options.MainRoadCornerMode,requireBuildingRoad=true,parkingAccessFailures=Draft?.ParkingAccessFailures??0,requireFrontParking=Mod.Options.RequireFrontParking,open=Open,mode=Mode,status=LayoutPending?"AP.Calculating":Status,points=Boundary.Count,zonePoints=ZonePoints.Count,zones=Zones.Count,entrances=Entrances.Count,replacement=ReplacementIndex>=0&&Draft!=null?Draft.Parcels[ReplacementIndex].AssetId:null,entrance=EntranceLength,selected=Selected.ToArray(),snaps=new[]{Mod.Options.SnapRoads,Mod.Options.SnapBuildings,Mod.Options.SnapLots,Mod.Options.SnapGrid,Mod.Options.SnapDirections,Mod.Options.SnapGuides,Mod.Options.SnapClose},area=Draft?.Area??(Boundary.Count>=3?System.Math.Abs(Layout.SignedArea(Boundary)):0),far=Draft?.Far??0,homes=Draft?.Homes??0,shortfall=Draft?.Shortfall,counts=Draft?.Parcels.GroupBy(p=>p.Kind==1&&p.InvisibleRoad?10:p.Kind).ToDictionary(g=>g.Key,g=>g.Count()),accessFailures=Draft?.RequiredAccessFailures??0,areas=Draft?.Parcels.GroupBy(p=>p.Kind==1&&p.InvisibleRoad?10:p.Kind).ToDictionary(g=>g.Key,g=>g.Sum(p=>p.Area)),suggestCleanup=Draft!=null&&Saved.Where(p=>p.Info.Number!=EditingPlan).Sum(p=>(long)p.Shapes.Count)+Preview.Count+Boundary.Count>PlanLimits.TotalShapes,saved=Saved.Where(p=>!p.Hidden).Select(StoredSummary),colors=Mod.Options?.Colors,canSave=!CompoundApplying&&catalogReady&&!CatalogLoading&&RoadPoints.Count==0&&!LayoutPending&&!LayoutOutdated&&Status!="AP.NetworkUnavailable"&&Draft?.Parcels.Any(p=>p.Kind==0)==true&&Draft.RequiredAccessFailures==0});
 }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

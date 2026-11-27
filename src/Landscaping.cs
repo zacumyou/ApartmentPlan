@@ -17,7 +17,7 @@ public partial class PlanSystem {
  Plan treePlan;string treeKey;
  internal int ActiveTreeDensity=>Villa?Mod.Options.VillaTreeDensity:Mod.Options.TreeDensity;
  internal void RefreshPlannedTrees(){
-  if(Draft==null&&!Saved.Any(p=>!p.TreePreviewReady&&!IsBuilt(p)&&p.Edit?.Draft!=null))return;
+  if(Draft==null&&!Saved.Any(p=>!p.TreePreviewReady&&!IsBuilt(p)&&p.CachedEdit?.Draft!=null))return;
   CatalogTrees();RefreshStoredTreePreviews();
   if(Draft==null){PlannedTrees.Clear();treePlan=null;return;}var o=Mod.Options;
   string key=o.PlantTrees+"|"+ActiveTreeDensity+"|"+o.TreeAges+"|"+o.TreeSeed+"|"+o.TreeSpeciesJson+"|"+o.TreePlacementMode;
@@ -28,7 +28,7 @@ public partial class PlanSystem {
  }
  void RefreshStoredTreePreviews(){
   if(Trees.Count==0)return;
-  foreach(var stored in Saved){if(stored.TreePreviewReady||IsBuilt(stored)||stored.Edit?.Draft==null)continue;
+  foreach(var stored in Saved){if(stored.TreePreviewReady||IsBuilt(stored)||stored.CachedEdit?.Draft==null)continue;
    var settings=stored.Edit.Settings;var o=Mod.Options;
    T Read<T>(string key,T fallback){try{return settings!=null&&settings.TryGetValue(key,out var value)?(T)Convert.ChangeType(value,typeof(T),System.Globalization.CultureInfo.InvariantCulture):fallback;}catch{return fallback;}}
    if(Read("PlantTrees",true)){
@@ -132,6 +132,3 @@ public partial class ConstructionTool {
  }
 }
 }
-
-
-

@@ -20,9 +20,39 @@ public partial class PlanSystem {
  }
  PlanEditData ReadEdit(Entity e){
   if(!EntityManager.HasBuffer<PlanEditByte>(e))return null;
-  var buffer=EntityManager.GetBuffer<PlanEditByte>(e,true);if(buffer.Length>MaxEditBytes)return null;
-  var bytes=new byte[buffer.Length];for(int i=0;i<bytes.Length;i++){if(buffer[i].Value<0||buffer[i].Value>255)return null;bytes[i]=(byte)buffer[i].Value;}
-  try{var d=PlanEditCodec.Decode(bytes);return d?.Version==1&&d.Boundary!=null&&Layout.Valid(d.Boundary)&&d.Entrances!=null&&d.Draft!=null?d:null;}catch(Exception ex){Trace.Failure("restore.edit",ex);return null;}
+  var b=EntityManager.GetBuffer<PlanEditByte>(e,true);
+  try{
+   PlanEditData d;
+   if(b.Length>0&&b[0].Value==PlanArchive.Tag)d=PlanArchive.Read(i=>b[i].Value,b.Length);
+   else{
+    if(b.Length>MaxEditBytes)return null;
+    var bytes=new byte[b.Length];
+    for(int i=0;i<b.Length;i++){int value=b[i].Value;if(value<0||value>255)return null;bytes[i]=(byte)value;}
+    d=PlanEditCodec.Decode(bytes);
+   }
+   return d?.Version==1&&d.Boundary!=null&&Layout.Valid(d.Boundary)&&d.Entrances!=null&&d.Draft!=null?d:null;
+  }catch(Exception ex){Trace.Failure("restore.edit",ex);return null;}
+ }
+ void WriteArchive(Entity e,int[] words){
+  if(!EntityManager.HasBuffer<PlanEditByte>(e))EntityManager.AddBuffer<PlanEditByte>(e);
+  var b=EntityManager.GetBuffer<PlanEditByte>(e);
+  b.ResizeUninitialized(words.Length);
+  for(int i=0;i<words.Length;i++)b[i]=new PlanEditByte{Value=words[i]};
+ }
+ void RestoreEdit(StoredPlan stored){
+  var e=stored.Entity;
+  if(!EntityManager.HasBuffer<PlanEditByte>(e))return;
+  var b=EntityManager.GetBuffer<PlanEditByte>(e,true);
+  if(b.Length>0&&b[0].Value==PlanArchive.Tag){
+   try{stored.Summary=PlanArchive.Header(i=>b[i].Value,b.Length);stored.LoadEdit=()=>ReadEdit(e);}
+   catch(Exception ex){Trace.Failure("restore.header",ex);}
+   return;
+  }
+  // Legacy cities pay the JSON conversion once. Persist the new format on the next city save.
+  var edit=ReadEdit(e);if(edit==null)return;
+  var bytes=new byte[b.Length];for(int i=0;i<b.Length;i++)bytes[i]=(byte)b[i].Value;
+  var words=PlanArchive.Encode(edit,bytes);
+  WriteArchive(e,words);stored.Summary=PlanEditSummary.From(edit);stored.LoadEdit=()=>ReadEdit(e);
  }
  internal void InspectPlan(int id){if(!Saved.Any(p=>p.Info.Number==id))return;NativeAuditAvailable=false;SelectedPlan=id;Open=false;Focused=false;Exit();SelectCompoundInfo();Revision++;}
  void EditStored(){
@@ -47,7 +77,7 @@ public partial class PlanSystem {
   }else{Draft=null;Mode="entrance";Status="AP.LegacyEdit";}
   Entrance=Entrances.Count>0?(Point?)Entrances[0]:null;EntranceLength=Mod.Options.EntranceLength;Open=true;Activate();Trace.Event("plan.edit.open","id="+EditingPlan+" mode="+Mode);Revision++;
  }
- internal bool IsBuilt(StoredPlan p)=>WasConstructed(p.Entity)||p.Edit?.NativeCommitted==true;
+ internal bool IsBuilt(StoredPlan p)=>WasConstructed(p.Entity)||p.Summary?.NativeCommitted==true;
  bool WasConstructed(Entity e)=>EntityManager.HasComponent<PlanConstructionState>(e)&&EntityManager.GetComponentData<PlanConstructionState>(e).Applied!=0;
  void RecordConstruction(){
   var stored=Saved.Find(p=>p.Info.Number==EditingPlan);if(stored==null)return;
@@ -62,7 +92,7 @@ public partial class PlanSystem {
   QueueStoredAudit(stored.Info.Number);
  }
  void BuildStored(){
-  var stored=SelectedStored;if(stored==null||WasConstructed(stored.Entity)||stored.Edit?.NativeCommitted==true)return;
+  var stored=SelectedStored;if(stored==null||IsBuilt(stored))return;
   EditStored();if(EditingPlan!=stored.Info.Number||!Open)return;if(Draft!=null)BeginConstruction();else Status="AP.LegacyBuild";
  }
  void BeginConstruction(){
@@ -95,6 +125,6 @@ public partial class PlanSystem {
   Mode="preview";Status="AP.NativeChecking";World.GetOrCreateSystemManaged<Game.Tools.ToolSystem>().activeTool=World.GetOrCreateSystemManaged<ConstructionTool>();
  }
  internal static List<Point> StoredBoundary(StoredPlan p)=>p.Shapes.Where(s=>s.Kind==7&&Math.Abs(s.Width-.5f)<.001f).Select(s=>new Point(s.A.x,s.A.z)).ToList();
- internal object StoredSummary(StoredPlan p)=>p==null?null:new{name=p.Edit?.Name,cleanupShapes=p.Info.Number!=EditingPlan&&!IsBuilt(p)&&p.Edit?.Pending==null&&!HasOwnedObjects(p)?p.Shapes.Count:0,canDelete=CanDeleteTarget(p.Info.Number),deleteReason=DeletionReason(p.Info.Number),parked=p.Info.Number==occupancyPlan?ParkedCount:null,occupiedHomes=p.Info.Number==occupancyPlan?OccupiedHomes:null,parkingCapacity=p.Info.Number==occupancyPlan?LiveParkingCapacity:null,homeCapacity=p.Info.Number==occupancyPlan?LiveHomeCapacity:null,owned=OwnedObjects(p).Count,id=p.Info.Number,area=p.Info.Area,far=p.Info.Far,homes=p.Info.Homes,built=WasConstructed(p.Entity)||p.Edit?.NativeCommitted==true,buildings=p.Edit?.AppliedPlans!=null?p.Edit.AppliedPlans.Sum(plan=>plan.Parcels.Count(r=>r.Kind==0)):p.Shapes.Count(s=>s.Kind==0),parking=p.Edit?.AppliedPlans!=null?p.Edit.AppliedPlans.Sum(plan=>plan.Parcels.Sum(r=>r.ParkingSpaces)):p.Edit?.Draft?.Parcels.Sum(r=>r.ParkingSpaces),editable=Layout.Valid(StoredBoundary(p)),legacy=p.Edit==null};
+ internal object StoredSummary(StoredPlan p)=>p==null?null:new{name=p.Summary?.Name,cleanupShapes=p.Info.Number!=EditingPlan&&!IsBuilt(p)&&p.Summary?.Pending!=true&&!HasOwnedObjects(p)?p.Shapes.Count:0,canDelete=CanDeleteTarget(p.Info.Number),deleteReason=DeletionReason(p.Info.Number),parked=p.Info.Number==occupancyPlan?ParkedCount:null,occupiedHomes=p.Info.Number==occupancyPlan?OccupiedHomes:null,parkingCapacity=p.Info.Number==occupancyPlan?LiveParkingCapacity:null,homeCapacity=p.Info.Number==occupancyPlan?LiveHomeCapacity:null,owned=OwnedObjects(p).Count,id=p.Info.Number,area=p.Info.Area,far=p.Info.Far,homes=p.Info.Homes,built=WasConstructed(p.Entity)||p.Summary?.NativeCommitted==true,buildings=p.Summary?.Buildings??p.Shapes.Count(s=>s.Kind==0),parking=p.Summary?.Parking,editable=p.BoundaryEditable,legacy=p.Summary==null};
 }
 }

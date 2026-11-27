@@ -10,7 +10,7 @@ namespace ApartmentPlan {
 public partial class ConstructionTool {
  // Read-only, bounded diagnostics using the same ownership policy as validation.
  // The Temp query is global; these records do not assert ownership by this tool.
- void TraceBlockedDeletions(NativeArray<Entity> entities,int blocked,HashSet<Entity> replacementRoots){
+ void TraceBlockedDeletions(NativeArray<Entity> entities,int blocked,HashSet<Entity> vetoed){
   try{
    int total=0,written=0;
    foreach(var e in entities){var t=EntityManager.GetComponentData<Temp>(e);if(t.m_Original!=Entity.Null&&(t.m_Flags&TempFlags.Delete)!=0)total++;}
@@ -19,7 +19,7 @@ public partial class ConstructionTool {
    for(int pass=0;pass<2;pass++)foreach(var e in entities){
     var t=EntityManager.GetComponentData<Temp>(e);
     if(t.m_Original==Entity.Null||(t.m_Flags&TempFlags.Delete)==0)continue;
-    bool allowed=IsNetworkReplacement(t.m_Original,replacementRoots);if(allowed!=(pass==1)||written>=24)continue;
+    bool allowed=!vetoed.Contains(t.m_Original);if(allowed!=(pass==1)||written>=24)continue;
     written++;
     Trace.Event("construction.failure.deletion.object","blocked="+!allowed+" temp={"+DescribeDeletionEntity(e)+"} original={"+DescribeDeletionEntity(t.m_Original)+"}");
     TraceDeletionEdges(e);TraceDeletionEdges(t.m_Original);

@@ -16,6 +16,14 @@ public static class ConstructionCurves {
   if(plan.AdditionCourses!=null)return plan.AdditionCourses.ToList();
   if(plan.VillaExistingRoadsOnly)return new List<ConstructionCourse>();
   if(plan.TowerAlgorithmVersion>=1)return TowerConstruction.Create(plan);
+  // Build oblique slab graphs in row coordinates before any endpoint rounding.
+  if(!plan.Villa&&!plan.Tower&&Math.Abs(plan.Right.X*plan.Right.Y)>1e-8){
+   var local=Create(plan.ConstructionFrame());
+   foreach(var course in local){
+    var c=course.Curve;course.Curve=new PlanBezier{A=plan.World(c.A),B=plan.World(c.B),C=plan.World(c.C),D=plan.World(c.D)};
+   }
+   return local;
+  }
   var edges=ConstructionGraph.Create(plan);var junctionGraph=edges.ToArray();var nodes=edges.SelectMany(e=>new[]{e.A,e.B}).ToArray();var result=new List<ConstructionCourse>();
   foreach(var route in plan.Routes.Concat(plan.ConstructionRoutes))foreach(var local in route.Curves??new List<PlanBezier>()){
    var curve=new PlanBezier{A=plan.World(local.A),B=plan.World(local.B),C=plan.World(local.C),D=plan.World(local.D)};
@@ -34,7 +42,7 @@ public static class ConstructionCurves {
   // Keep the graph's shared positions, not independently projected curve positions.
   Point Snap(Point p){var near=nodes.OrderBy(q=>(q-p).Length).FirstOrDefault();return (near-p).Length<.1?near:p;}
   foreach(var course in result){var c=course.Curve;var a=Snap(c.A);var b=Snap(c.D);c.B=c.B+(a-c.A);c.C=c.C+(b-c.D);c.A=a;c.D=b;}
-  result.AddRange(edges.Select(e=>new ConstructionCourse{Use=e.Use,Width=e.Width,Curve=new PlanBezier{A=e.A,B=e.A+(e.B-e.A)*(1.0/3),C=e.A+(e.B-e.A)*(2.0/3),D=e.B}}));SimplifyVillaNodes(result);return WalkRoadClearance.Apply(result,plan.Tower?plan.TowerWalkGap:WalkRoadClearance.Gap);
+  result.AddRange(edges.Select(e=>new ConstructionCourse{Use=e.Use,Width=e.Width,Curve=new PlanBezier{A=e.A,B=e.A+(e.B-e.A)*(1.0/3),C=e.A+(e.B-e.A)*(2.0/3),D=e.B}}));SimplifyVillaNodes(result);TowerConstruction.MergeCloseJunctions(result,false,plan.Villa||plan.Tower?null:plan);return WalkRoadClearance.Apply(result,plan.Tower?plan.TowerWalkGap:WalkRoadClearance.Gap);
  }
  // Merge only degree-two continuation nodes. Junctions and road types stay fixed.
  public static void SimplifyVillaNodes(List<ConstructionCourse> courses){

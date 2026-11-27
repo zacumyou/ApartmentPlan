@@ -6,6 +6,8 @@
 
 대형 부지의 배치 미리보기를 더 빨리 계산합니다. 420 × 300m 판상형 부지에 크기가 다른 건물 5종을 선택한 비교 시험에서, 입구가 1개일 때 28.6초에서 1.4초로, 2개일 때 약 49~50초에서 2.0~2.6초로 줄었습니다. 직전 공개 버전(0.1.166)과 게임 밖에서 비교한 결과이며, 실제 대기 시간은 부지와 PC에 따라 달라집니다.
 
+도시마다 설계도를 최대 256개까지 저장할 수 있습니다. 기존 설계도는 도시를 열 때 자동으로 변환되며, 다음 도시 저장부터 압축 형식으로 보관됩니다.
+
 ### 시작하기
 
 1. 아래 필수 모드 4개를 Apartment Plan과 같은 플레이셋에서 켭니다.
@@ -55,6 +57,8 @@
 Draw a boundary, mark the entrances and choose your buildings. Apartment Plan lays out a slab apartment complex, a tower complex or a low-rise neighbourhood. You can see where the buildings, streets, parking and footpaths will go before you build.
 
 Large sites now take less time to plan. In an offline comparison with version 0.1.166, a 420 × 300 m slab site with five building sizes took 1.4 seconds instead of 28.6 with one entrance, and 2.0–2.6 seconds instead of 49–50 with two. In-game wait times depend on the site and your PC.
+
+Save up to 256 plans per city. Existing plans convert automatically when you open the city and are stored in compressed form the next time you save.
 
 ### Getting started
 

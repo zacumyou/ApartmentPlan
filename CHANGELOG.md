@@ -1,3 +1,17 @@
+# 0.1.181
+
+## 한국어
+
+- 도시마다 설계도를 최대 256개까지 저장할 수 있습니다. 기존 설계도는 도시를 열 때 자동으로 변환되며, 다음 도시 저장부터 압축 형식으로 보관됩니다. 설계도가 많은 도시에서 목록을 불러오고 지도 위 단지를 선택하는 부담도 줄였습니다.
+- 판상형 단지 안에서 가까운 두 T자 교차로를 합칠 때 가지도로가 비스듬해지는 경우를 줄였습니다. 사선이나 곡선을 보존해야 하는 곳은 기존 연결을 유지합니다. 탑상형 단지에서는 곡선 도로와 가지도로의 연결을 개선했습니다.
+- 입구를 연결하면서 차선이나 구획이 다시 만들어질 때 삭제 보호가 건설을 막는 경우를 줄였습니다. 기존 건물이나 대체되지 않는 도로 구간은 계속 보호합니다.
+
+## English
+
+- Save up to 256 plans per city. Existing plans convert automatically when you open the city and are stored in compressed form the next time you save. Cities with many plans also do less work when loading the plan list or selecting a compound on the map.
+- In slab compounds, nearby T-junctions can now form a right-angle crossroads without skewing the side streets. Existing connections are kept where a diagonal or curve needs to stay in place. Branch roads also connect more reliably to curves in tower compounds.
+- Connecting an entrance is less likely to be blocked when the game rebuilds lanes or zoning cells. Existing buildings and road segments that would be lost still have deletion protection.
+
 # 0.1.176
 
 ## 한국어

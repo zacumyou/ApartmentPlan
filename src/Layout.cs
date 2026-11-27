@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 namespace ApartmentPlan {
 public static class PlanLimits {
- public const int Parcels=4800,TotalShapes=48000,SavedPlans=64,Zones=32,Roads=64;
+ public const int Parcels=4800,TotalShapes=48000,SavedPlans=256,Zones=32,Roads=64;
 }
 public sealed class PlanLimitException:ArgumentException {
  public readonly string Status;public readonly double Current,Maximum;
@@ -123,6 +123,11 @@ public sealed class Plan {
  public List<ParkingConnection> ParkingConnections=new List<ParkingConnection>();public int ParkingAccessFailures;public int RequiredAccessFailures;public string Diagnostics="";
  public List<Point> Boundary=new List<Point>(); public List<Parcel> Parcels=new List<Parcel>();
  public Point Origin,Right,Forward; public double Area,Far; public int Homes; public bool Limited; public int RequestedParcels,ParcelLimit; public double[] Shortfall=new double[7];
+ internal Plan ConstructionFrame(){
+  var local=(Plan)MemberwiseClone();
+  local.Boundary=Boundary.Select(Local).ToList();local.Origin=new Point();local.Right=new Point(1,0);local.Forward=new Point(0,1);
+  return local;
+ }
  public Point World(Point p)=>Origin+Right*p.X+Forward*p.Y;
  public Point Local(Point p){var q=p-Origin;return new Point(q.X*Right.X+q.Y*Right.Y,q.X*Forward.X+q.Y*Forward.Y);}
 }

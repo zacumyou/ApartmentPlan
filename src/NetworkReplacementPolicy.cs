@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 namespace ApartmentPlan {
 internal static class NetworkReplacementPolicy {
+ // Only loss of a building or an unreplaced network edge vetoes placement.
+ internal static bool BlocksPlacement(bool building,bool edge,bool replaced)=>building||(edge&&!replaced);
  internal static HashSet<T> ConnectedComponent<T>(T start,List<Tuple<T,T>> links){
   var graph=new Dictionary<T,List<T>>();
   foreach(var link in links){if(!graph.TryGetValue(link.Item1,out var a)){a=new List<T>();graph[link.Item1]=a;}a.Add(link.Item2);if(!graph.TryGetValue(link.Item2,out var b)){b=new List<T>();graph[link.Item2]=b;}b.Add(link.Item1);}
@@ -43,5 +45,3 @@ internal static class NetworkReplacementPolicy {
  }
 }
 }
-
-

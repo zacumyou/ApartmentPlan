@@ -43,7 +43,7 @@ public partial class PlanSystem {
   var edit=ReadEdit(stored.Entity);var pending=PlanEditCodec.Decode(CaptureEdit());pending.NativeCommitted=false;pending.Name=edit.Name;edit.Pending=pending;
   WriteCompoundEdit(stored,edit);if(notify)Status="AP.CompoundPendingSaved";Revision++;return true;
  }
- void WriteCompoundEdit(StoredPlan stored,PlanEditData edit){var bytes=PlanEditCodec.Encode(edit);if(bytes.Length>MaxEditBytes)throw new InvalidOperationException("Compound edit exceeds save budget");var b=EntityManager.GetBuffer<PlanEditByte>(stored.Entity);b.Clear();foreach(var value in bytes)b.Add(new PlanEditByte{Value=value});stored.Edit=edit;}
+ void WriteCompoundEdit(StoredPlan stored,PlanEditData edit){var bytes=PlanEditCodec.Encode(edit);if(bytes.Length>MaxEditBytes)throw new InvalidOperationException("Compound edit exceeds save budget");WriteArchive(stored.Entity,PlanArchive.Encode(edit,bytes));stored.Edit=edit;RebuildPickIndex();}
  bool PrepareCompoundAdditions(){
   if(!CompoundEditing)return true;
   if(CompoundApplying){Status="AP.NativeChecking";return false;}
